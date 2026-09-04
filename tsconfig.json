@@ -1,0 +1,26 @@
+{
+	"include": [
+		"app/**/*.ts",
+		"app/**/*.tsx",
+		"*.ts",
+		".react-router/types/**/*"
+	],
+	"compilerOptions": {
+		"lib": ["DOM", "DOM.Iterable", "ES2022"],
+		"strict": true,
+		"skipLibCheck": true,
+		"isolatedModules": true,
+		"esModuleInterop": true,
+		"jsx": "react-jsx",
+		"module": "ES2022",
+		"moduleResolution": "Bundler",
+		"target": "ES2022",
+		"types": [
+			"@shopify/oxygen-workers-types",
+			"@shopify/hydrogen/react-router-types",
+			"vite/client"
+		],
+		"noEmit": true,
+		"rootDirs": [".", ".react-router/types"]
+	}
+}
