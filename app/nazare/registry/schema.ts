@@ -31,6 +31,8 @@ export type CapabilityDefinition = {
 	sourceFiles: readonly string[];
 };
 
-export function defineCapability<const T extends CapabilityDefinition>(definition: T) {
+export function defineCapability<const T extends CapabilityDefinition>(
+	definition: T,
+) {
 	return definition;
 }

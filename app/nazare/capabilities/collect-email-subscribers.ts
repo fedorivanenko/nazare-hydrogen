@@ -15,13 +15,9 @@ export const collectEmailSubscribers = defineCapability({
 	intent: "Collect visitor email addresses for future marketing communication",
 	keywords: ["email", "newsletter", "subscriber", "signup", "marketing"],
 
-	surfaces: [
-		{ type: "surface", id: "carcass.section.hero" },
-	],
+	surfaces: [{ type: "surface", id: "carcass.section.hero" }],
 
-	providers: [
-		{ type: "provider", id: "resend", action: "contacts.create" },
-	],
+	providers: [{ type: "provider", id: "resend", action: "contacts.create" }],
 
 	policies: [
 		{

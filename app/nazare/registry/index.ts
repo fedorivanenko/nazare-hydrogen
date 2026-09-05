@@ -1,11 +1,14 @@
 import { collectEmailSubscribers } from "../capabilities/collect-email-subscribers";
 import type { CapabilityDefinition } from "./schema";
 
-const capabilities = [collectEmailSubscribers] as const satisfies readonly CapabilityDefinition[];
+const capabilities = [
+	collectEmailSubscribers,
+] as const satisfies readonly CapabilityDefinition[];
 
-export const capabilityRegistry = new Map(
-	capabilities.map((capability) => [capability.id, capability]),
-);
+type RegisteredCapability = (typeof capabilities)[number];
+
+export const capabilityRegistry: ReadonlyMap<string, RegisteredCapability> =
+	new Map(capabilities.map((capability) => [capability.id, capability]));
 
 export function listCapabilities() {
 	return capabilities;
@@ -31,7 +34,10 @@ export function searchCapabilities(query: string) {
 				capability.intent,
 				...(capability.keywords ?? []),
 				...capability.surfaces.map((surface) => surface.id),
-				...capability.providers.flatMap((provider) => [provider.id, provider.action ?? ""]),
+				...capability.providers.flatMap((provider) => [
+					provider.id,
+					provider.action ?? "",
+				]),
 			]
 				.join(" ")
 				.toLowerCase();

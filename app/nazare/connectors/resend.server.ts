@@ -24,7 +24,9 @@ export async function createResendContact(
 
 	if (!response.ok) {
 		const details = await response.text();
-		throw new Error(`Resend contact creation failed: ${response.status} ${details}`);
+		throw new Error(
+			`Resend contact creation failed: ${response.status} ${details}`,
+		);
 	}
 
 	return response.json() as Promise<{ id: string }>;
