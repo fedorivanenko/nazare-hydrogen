@@ -11,13 +11,16 @@ function validateEmail(email: string) {
 }
 
 export const collectEmailSubscribers = defineCapability({
-	id: "collect-email-subscribers",
+	id: "capability.collect-email-subscribers",
+	kind: "capability",
 	intent: "Collect visitor email addresses for future marketing communication",
 	keywords: ["email", "newsletter", "subscriber", "signup", "marketing"],
 
 	surfaces: [{ type: "surface", id: "carcass.section.hero" }],
 
-	providers: [{ type: "provider", id: "resend", action: "contacts.create" }],
+	providers: [
+		{ type: "provider", id: "provider.resend", action: "contacts.create" },
+	],
 
 	policies: [
 		{
@@ -55,7 +58,7 @@ export const collectEmailSubscribers = defineCapability({
 			ok: true as const,
 			evidence: {
 				type: "connector-result",
-				connector: "resend.contacts.create",
+				connector: "provider.resend.contacts.create",
 				result: "contact-created",
 			},
 		};
