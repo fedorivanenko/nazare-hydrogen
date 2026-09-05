@@ -1,3 +1,8 @@
+export const resendConnector = {
+	id: "resend",
+	actions: ["contacts.create"] as const,
+};
+
 export type ResendConnectorEnv = {
 	RESEND_API_KEY?: string;
 };
