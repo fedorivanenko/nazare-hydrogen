@@ -1,11 +1,16 @@
 import { Form } from "react-router";
+import { defineCarcass } from "../../registry/schema";
 
-export const heroContract = {
+export const heroContract = defineCarcass({
 	id: "carcass.section.hero",
+	kind: "carcass",
+	carcassKind: "section",
 	intent: "Introduce the primary message and action for a page",
-	props: ["eyebrow", "heading", "body", "emailCapture"] as const,
-	constraints: ["heading-required"] as const,
-};
+	keywords: ["hero", "headline", "landing", "banner"],
+	props: ["eyebrow", "heading", "body", "emailCapture"],
+	constraints: ["heading-required"],
+	sourceFiles: ["app/nazare/carcass/sections/Hero.tsx"],
+});
 
 type HeroProps = {
 	eyebrow?: string;
