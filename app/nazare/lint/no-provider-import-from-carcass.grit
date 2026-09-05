@@ -1,0 +1,11 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+`import $_ from $source` where {
+	$source <: r".*connectors/.*",
+	register_diagnostic(
+		span = $source,
+		message = "Carcass must not import providers directly. Bind provider behavior through a Nazare capability.",
+		severity = "error"
+	)
+}
