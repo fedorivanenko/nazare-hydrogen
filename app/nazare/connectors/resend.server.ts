@@ -1,7 +1,18 @@
-export const resendConnector = {
-	id: "resend",
-	actions: ["contacts.create"] as const,
-};
+import { defineProvider } from "../registry/schema";
+
+export const resendConnector = defineProvider({
+	id: "provider.resend",
+	kind: "provider",
+	intent: "Email delivery and audience management through Resend",
+	keywords: ["resend", "email", "contacts", "audience"],
+	actions: [
+		{
+			id: "contacts.create",
+			intent: "Create a contact in Resend",
+		},
+	],
+	sourceFiles: ["app/nazare/connectors/resend.server.ts"],
+});
 
 export type ResendConnectorEnv = {
 	RESEND_API_KEY?: string;
