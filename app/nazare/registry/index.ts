@@ -1,43 +1,68 @@
 import { collectEmailSubscribers } from "../capabilities/collect-email-subscribers";
-import type { CapabilityDefinition } from "./schema";
+import { heroContract } from "../carcass/sections/Hero";
+import { resendConnector } from "../connectors/resend.server";
+import type {
+	CapabilityDefinition,
+	CarcassDefinition,
+	ProviderDefinition,
+	RegistryEntity,
+	RegistryEntityKind,
+} from "./schema";
 
-const capabilities = [
+const entities = [
 	collectEmailSubscribers,
-] as const satisfies readonly CapabilityDefinition[];
+	heroContract,
+	resendConnector,
+] as const satisfies readonly RegistryEntity[];
 
-type RegisteredCapability = (typeof capabilities)[number];
+type RegisteredEntity = (typeof entities)[number];
 
-export const capabilityRegistry: ReadonlyMap<string, RegisteredCapability> =
-	new Map(capabilities.map((capability) => [capability.id, capability]));
+export const registry: ReadonlyMap<string, RegisteredEntity> = new Map(
+	entities.map((entity) => [entity.id, entity]),
+);
 
-export function listCapabilities() {
-	return capabilities;
+export function listEntities(kind?: RegistryEntityKind) {
+	return kind ? entities.filter((entity) => entity.kind === kind) : [...entities];
 }
 
-export function getCapability(id: string) {
-	return capabilityRegistry.get(id) ?? null;
+export function getEntity(id: string) {
+	return registry.get(id) ?? null;
 }
 
-export function searchCapabilities(query: string) {
+export function searchRegistry(query: string, kind?: RegistryEntityKind) {
 	const terms = query
 		.toLowerCase()
 		.split(/\s+/)
 		.map((term) => term.trim())
 		.filter(Boolean);
 
-	if (terms.length === 0) return [...capabilities];
+	const candidates = kind
+		? entities.filter((entity) => entity.kind === kind)
+		: entities;
 
-	return capabilities
-		.map((capability) => {
+	if (terms.length === 0) return [...candidates];
+
+	return candidates
+		.map((entity) => {
+			const extras =
+				entity.kind === "capability"
+					? [
+						...entity.surfaces.map((surface) => surface.id),
+						...entity.providers.flatMap((provider) => [
+							provider.id,
+							provider.action ?? "",
+						]),
+					]
+					: entity.kind === "provider"
+						? entity.actions.flatMap((action) => [action.id, action.intent])
+						: [entity.carcassKind, ...(entity.props ?? [])];
+
 			const haystack = [
-				capability.id,
-				capability.intent,
-				...(capability.keywords ?? []),
-				...capability.surfaces.map((surface) => surface.id),
-				...capability.providers.flatMap((provider) => [
-					provider.id,
-					provider.action ?? "",
-				]),
+				entity.id,
+				entity.kind,
+				entity.intent,
+				...(entity.keywords ?? []),
+				...extras,
 			]
 				.join(" ")
 				.toLowerCase();
@@ -47,9 +72,31 @@ export function searchCapabilities(query: string) {
 				0,
 			);
 
-			return { capability, score };
+			return { entity, score };
 		})
 		.filter(({ score }) => score > 0)
 		.sort((a, b) => b.score - a.score)
-		.map(({ capability }) => capability);
+		.map(({ entity }) => entity);
+}
+
+// Compatibility helpers for capability-specific callers.
+export function listCapabilities() {
+	return listEntities("capability") as CapabilityDefinition[];
+}
+
+export function getCapability(id: string) {
+	const entity = getEntity(id);
+	return entity?.kind === "capability" ? (entity as CapabilityDefinition) : null;
+}
+
+export function searchCapabilities(query: string) {
+	return searchRegistry(query, "capability") as CapabilityDefinition[];
+}
+
+export function listCarcass() {
+	return listEntities("carcass") as CarcassDefinition[];
+}
+
+export function listProviders() {
+	return listEntities("provider") as ProviderDefinition[];
 }
