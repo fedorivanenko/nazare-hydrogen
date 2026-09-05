@@ -6,7 +6,10 @@
 	"scripts": {
 		"dev": "shopify hydrogen dev",
 		"build": "shopify hydrogen build",
-		"typecheck": "react-router typegen && tsc --noEmit"
+		"typecheck": "react-router typegen && tsc --noEmit",
+		"lint:biome": "npx --yes @biomejs/biome@2.5.12 check .",
+		"lint:nazare": "npx --yes tsx@4.20.5 app/nazare/lint/cli.ts",
+		"lint": "npm run lint:biome && npm run lint:nazare"
 	},
 	"dependencies": {
 		"@shopify/hydrogen": "2026.4.5",
