@@ -7,8 +7,8 @@
 		"dev": "shopify hydrogen dev",
 		"build": "shopify hydrogen build",
 		"typecheck": "react-router typegen && tsc --noEmit",
-		"lint:biome": "npx --yes @biomejs/biome@2.5.12 check .",
-		"lint:nazare": "npx --yes tsx@4.20.5 app/nazare/lint/cli.ts",
+		"lint:biome": "biome check .",
+		"lint:nazare": "tsx app/nazare/lint/cli.ts",
 		"lint": "npm run lint:biome && npm run lint:nazare"
 	},
 	"dependencies": {
@@ -18,12 +18,15 @@
 		"react-router": "7.16.0"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.5.12",
 		"@react-router/dev": "7.16.0",
 		"@shopify/cli": "4.7.1",
 		"@shopify/mini-oxygen": "4.2.2",
 		"@shopify/oxygen-workers-types": "4.2.0",
+		"@types/node": "^24.13.3",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.7",
+		"tsx": "^4.23.13",
 		"typescript": "5.9.3",
 		"vite": "8.2.2"
 	},

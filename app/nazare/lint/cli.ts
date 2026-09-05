@@ -1,7 +1,10 @@
+/// <reference types="node" />
+
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { listCapabilities } from "../registry/index";
 import { getProvider } from "../registry/providers";
+import type { CapabilityDefinition } from "../registry/schema";
 import { getSurface } from "../registry/surfaces";
 
 type Diagnostic = {
@@ -12,7 +15,7 @@ type Diagnostic = {
 
 async function lintCapabilityRegistry() {
 	const diagnostics: Diagnostic[] = [];
-	const capabilities = listCapabilities();
+	const capabilities: readonly CapabilityDefinition[] = listCapabilities();
 	const seen = new Set<string>();
 
 	for (const capability of capabilities) {
