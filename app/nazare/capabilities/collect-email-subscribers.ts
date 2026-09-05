@@ -2,7 +2,7 @@ import {
 	createResendContact,
 	type ResendConnectorEnv,
 } from "../connectors/resend.server";
-import { defineCapability } from "../registry/schema";
+import { collectEmailSubscribersDefinition } from "../registry/definitions";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -10,45 +10,19 @@ function validateEmail(email: string) {
 	return EMAIL_PATTERN.test(email);
 }
 
-export const collectEmailSubscribers = defineCapability({
-	id: "capability.collect-email-subscribers",
-	kind: "capability",
-	intent: "Collect visitor email addresses for future marketing communication",
-	keywords: ["email", "newsletter", "subscriber", "signup", "marketing"],
+const policyImplementations = {
+	"valid-email": validateEmail,
+} satisfies Record<
+	(typeof collectEmailSubscribersDefinition.policies)[number]["id"],
+	(email: string) => boolean
+>;
 
-	surfaces: [{ type: "surface", id: "carcass.section.hero" }],
-
-	providers: [
-		{ type: "provider", id: "provider.resend", action: "contacts.create" },
-	],
-
-	policies: [
-		{
-			id: "valid-email",
-			description: "Only accept syntactically valid email addresses",
-		},
-	],
-
-	evidence: [
-		{
-			id: "contact-created",
-			type: "runtime",
-			description: "Resend confirms that the contact was created",
-		},
-	],
-
-	sourceFiles: [
-		"app/nazare/capabilities/collect-email-subscribers.ts",
-		"app/nazare/carcass/sections/Hero.tsx",
-		"app/nazare/connectors/resend.server.ts",
-	],
-
-	policy: {
-		validate: validateEmail,
-	},
+export const collectEmailSubscribers = {
+	...collectEmailSubscribersDefinition,
+	policy: policyImplementations,
 
 	async execute(email: string, env: ResendConnectorEnv) {
-		if (!validateEmail(email)) {
+		if (!policyImplementations["valid-email"](email)) {
 			return { ok: false as const, error: "Enter a valid email address." };
 		}
 
@@ -63,4 +37,4 @@ export const collectEmailSubscribers = defineCapability({
 			},
 		};
 	},
-});
+};

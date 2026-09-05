@@ -7,6 +7,7 @@
 		"dev": "shopify hydrogen dev",
 		"build": "shopify hydrogen build",
 		"typecheck": "react-router typegen && tsc --noEmit",
+		"test": "tsx --test app/nazare/registry/index.test.ts",
 		"lint:biome": "biome check .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
 		"lint": "npm run lint:biome && npm run lint:nazare"

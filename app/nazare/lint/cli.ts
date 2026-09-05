@@ -42,7 +42,7 @@ async function lintRegistry() {
 
 		for (const surfaceRef of entity.surfaces) {
 			const surface = getEntity(surfaceRef.id);
-			if (!surface || surface.kind !== "carcass") {
+			if (surface?.kind !== "carcass") {
 				diagnostics.push({
 					level: "error",
 					entity: entity.id,
@@ -53,7 +53,7 @@ async function lintRegistry() {
 
 		for (const providerRef of entity.providers) {
 			const provider = getEntity(providerRef.id);
-			if (!provider || provider.kind !== "provider") {
+			if (provider?.kind !== "provider") {
 				diagnostics.push({
 					level: "error",
 					entity: entity.id,

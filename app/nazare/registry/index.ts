@@ -1,6 +1,8 @@
-import { collectEmailSubscribers } from "../capabilities/collect-email-subscribers";
-import { heroContract } from "../carcass/sections/Hero";
-import { resendConnector } from "../connectors/resend.server";
+import {
+	collectEmailSubscribersDefinition,
+	heroDefinition,
+	resendDefinition,
+} from "./definitions";
 import type {
 	CapabilityDefinition,
 	CarcassDefinition,
@@ -10,9 +12,9 @@ import type {
 } from "./schema";
 
 const entities = [
-	collectEmailSubscribers,
-	heroContract,
-	resendConnector,
+	collectEmailSubscribersDefinition,
+	heroDefinition,
+	resendDefinition,
 ] as const satisfies readonly RegistryEntity[];
 
 type RegisteredEntity = (typeof entities)[number];
@@ -22,7 +24,9 @@ export const registry: ReadonlyMap<string, RegisteredEntity> = new Map(
 );
 
 export function listEntities(kind?: RegistryEntityKind) {
-	return kind ? entities.filter((entity) => entity.kind === kind) : [...entities];
+	return kind
+		? entities.filter((entity) => entity.kind === kind)
+		: [...entities];
 }
 
 export function getEntity(id: string) {
@@ -47,12 +51,12 @@ export function searchRegistry(query: string, kind?: RegistryEntityKind) {
 			const extras =
 				entity.kind === "capability"
 					? [
-						...entity.surfaces.map((surface) => surface.id),
-						...entity.providers.flatMap((provider) => [
-							provider.id,
-							provider.action ?? "",
-						]),
-					]
+							...entity.surfaces.map((surface) => surface.id),
+							...entity.providers.flatMap((provider) => [
+								provider.id,
+								provider.action ?? "",
+							]),
+						]
 					: entity.kind === "provider"
 						? entity.actions.flatMap((action) => [action.id, action.intent])
 						: [entity.carcassKind, ...(entity.props ?? [])];
@@ -86,7 +90,9 @@ export function listCapabilities() {
 
 export function getCapability(id: string) {
 	const entity = getEntity(id);
-	return entity?.kind === "capability" ? (entity as CapabilityDefinition) : null;
+	return entity?.kind === "capability"
+		? (entity as CapabilityDefinition)
+		: null;
 }
 
 export function searchCapabilities(query: string) {

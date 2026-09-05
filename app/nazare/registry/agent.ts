@@ -1,6 +1,7 @@
 import {
 	getCapability,
 	getEntity,
+	listCapabilities,
 	searchCapabilities,
 	searchRegistry,
 } from "./index";
@@ -27,16 +28,22 @@ export function expandEntity(id: string) {
 	if (!entity) return null;
 
 	if (entity.kind === "capability") {
-		return {
-			entity,
-			neighbors: [
-				...entity.surfaces.map((ref) => getEntity(ref.id)).filter(Boolean),
-				...entity.providers.map((ref) => getEntity(ref.id)).filter(Boolean),
-			],
-		};
+		const neighbors = [...entity.surfaces, ...entity.providers]
+			.map((ref) => getEntity(ref.id))
+			.filter(
+				(neighbor): neighbor is NonNullable<typeof neighbor> =>
+					neighbor !== null,
+			);
+
+		return { entity, neighbors };
 	}
 
-	const relatedCapabilities = searchRegistry(entity.id, "capability");
+	const relatedCapabilities = listCapabilities().filter((capability) =>
+		entity.kind === "carcass"
+			? capability.surfaces.some((ref) => ref.id === entity.id)
+			: capability.providers.some((ref) => ref.id === entity.id),
+	);
+
 	return { entity, neighbors: relatedCapabilities };
 }
 
