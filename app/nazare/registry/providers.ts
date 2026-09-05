@@ -1,11 +1,8 @@
-import { resendConnector } from "../connectors/resend.server";
-
-const providers = [resendConnector] as const;
-
-export const providerRegistry = new Map(
-	providers.map((provider) => [provider.id, provider]),
-);
+import { getEntity, listProviders } from "./index";
 
 export function getProvider(id: string) {
-	return providerRegistry.get(id) ?? null;
+	const entity = getEntity(id);
+	return entity?.kind === "provider" ? entity : null;
 }
+
+export { listProviders };
