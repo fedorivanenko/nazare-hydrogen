@@ -21,12 +21,12 @@ export const collectEmailSubscribers = {
 	...collectEmailSubscribersDefinition,
 	policy: policyImplementations,
 
-	async execute(email: string, env: ResendConnectorEnv) {
+	async execute(email: string, env: ResendConnectorEnv, firstName?: string) {
 		if (!policyImplementations["valid-email"](email)) {
 			return { ok: false as const, error: "Enter a valid email address." };
 		}
 
-		await createResendContact(email, env);
+		await createResendContact(email, env, firstName);
 
 		return {
 			ok: true as const,

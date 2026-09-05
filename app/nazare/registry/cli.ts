@@ -35,13 +35,13 @@ switch (command) {
 		const [id, ...changeParts] = args;
 		const requestedChange = changeParts.join(" ");
 		if (!id || !requestedChange) {
-			throw new Error("Usage: nazare:registry plan <capability-id> <requested-change>");
+			throw new Error(
+				"Usage: nazare:registry plan <capability-id> <requested-change>",
+			);
 		}
 		print(planCapabilityChange(id, requestedChange));
 		break;
 	}
 	default:
-		throw new Error(
-			"Usage: nazare:registry <find|inspect|expand|plan> ...",
-		);
+		throw new Error("Usage: nazare:registry <find|inspect|expand|plan> ...");
 }

@@ -7,6 +7,7 @@ export type ResendConnectorEnv = {
 export async function createResendContact(
 	email: string,
 	env: ResendConnectorEnv,
+	firstName?: string,
 ) {
 	if (!env.RESEND_API_KEY) {
 		throw new Error("RESEND_API_KEY is not configured");
@@ -21,6 +22,7 @@ export async function createResendContact(
 		body: JSON.stringify({
 			email,
 			unsubscribed: false,
+			...(firstName?.trim() ? { first_name: firstName.trim() } : {}),
 		}),
 	});
 

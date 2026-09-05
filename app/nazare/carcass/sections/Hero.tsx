@@ -31,6 +31,13 @@ export function Hero({
 			{emailCapture ? (
 				<Form method="post" style={{ display: "flex", gap: 8, marginTop: 32 }}>
 					<input
+						type="text"
+						name="firstName"
+						placeholder="First name (optional)"
+						aria-label="First name (optional)"
+						style={{ flex: 1, padding: 12 }}
+					/>
+					<input
 						type="email"
 						name="email"
 						required

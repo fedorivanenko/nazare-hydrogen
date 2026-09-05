@@ -39,9 +39,10 @@ export async function action({
 }) {
 	const formData = await request.formData();
 	const email = String(formData.get("email") ?? "").trim();
+	const firstName = String(formData.get("firstName") ?? "").trim();
 
 	try {
-		return await collectEmailSubscribers.execute(email, context.env);
+		return await collectEmailSubscribers.execute(email, context.env, firstName);
 	} catch (error) {
 		console.error(error);
 		return { ok: false as const, error: "Could not subscribe right now." };
