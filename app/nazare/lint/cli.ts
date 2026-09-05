@@ -2,48 +2,61 @@
 
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
-import { listCapabilities } from "../registry/index";
-import { getProvider } from "../registry/providers";
-import type { CapabilityDefinition } from "../registry/schema";
-import { getSurface } from "../registry/surfaces";
+import { getEntity, listEntities } from "../registry/index";
+import type { RegistryEntity } from "../registry/schema";
 
 type Diagnostic = {
 	level: "error" | "warning";
-	capability: string;
+	entity: string;
 	message: string;
 };
 
-async function lintCapabilityRegistry() {
+async function lintRegistry() {
 	const diagnostics: Diagnostic[] = [];
-	const capabilities: readonly CapabilityDefinition[] = listCapabilities();
+	const entities: readonly RegistryEntity[] = listEntities();
 	const seen = new Set<string>();
 
-	for (const capability of capabilities) {
-		if (seen.has(capability.id)) {
+	for (const entity of entities) {
+		if (seen.has(entity.id)) {
 			diagnostics.push({
 				level: "error",
-				capability: capability.id,
-				message: "Duplicate capability id",
+				entity: entity.id,
+				message: "Duplicate registry entity id",
 			});
 		}
-		seen.add(capability.id);
+		seen.add(entity.id);
 
-		for (const surfaceRef of capability.surfaces) {
-			if (!getSurface(surfaceRef.id)) {
+		for (const sourceFile of entity.sourceFiles) {
+			try {
+				await access(resolve(process.cwd(), sourceFile));
+			} catch {
 				diagnostics.push({
 					level: "error",
-					capability: capability.id,
+					entity: entity.id,
+					message: `Missing source file: ${sourceFile}`,
+				});
+			}
+		}
+
+		if (entity.kind !== "capability") continue;
+
+		for (const surfaceRef of entity.surfaces) {
+			const surface = getEntity(surfaceRef.id);
+			if (!surface || surface.kind !== "carcass") {
+				diagnostics.push({
+					level: "error",
+					entity: entity.id,
 					message: `Unknown Carcass surface: ${surfaceRef.id}`,
 				});
 			}
 		}
 
-		for (const providerRef of capability.providers) {
-			const provider = getProvider(providerRef.id);
-			if (!provider) {
+		for (const providerRef of entity.providers) {
+			const provider = getEntity(providerRef.id);
+			if (!provider || provider.kind !== "provider") {
 				diagnostics.push({
 					level: "error",
-					capability: capability.id,
+					entity: entity.id,
 					message: `Unknown provider: ${providerRef.id}`,
 				});
 				continue;
@@ -51,47 +64,33 @@ async function lintCapabilityRegistry() {
 
 			if (
 				providerRef.action &&
-				!provider.actions.includes(
-					providerRef.action as (typeof provider.actions)[number],
-				)
+				!provider.actions.some((action) => action.id === providerRef.action)
 			) {
 				diagnostics.push({
 					level: "error",
-					capability: capability.id,
+					entity: entity.id,
 					message: `Unknown provider action: ${providerRef.id}.${providerRef.action}`,
 				});
 			}
 		}
 
-		if (capability.evidence.length === 0) {
+		if (entity.evidence.length === 0) {
 			diagnostics.push({
 				level: "warning",
-				capability: capability.id,
+				entity: entity.id,
 				message: "Capability has no declared evidence",
 			});
-		}
-
-		for (const sourceFile of capability.sourceFiles) {
-			try {
-				await access(resolve(process.cwd(), sourceFile));
-			} catch {
-				diagnostics.push({
-					level: "error",
-					capability: capability.id,
-					message: `Missing source file: ${sourceFile}`,
-				});
-			}
 		}
 	}
 
 	return diagnostics;
 }
 
-const diagnostics = await lintCapabilityRegistry();
+const diagnostics = await lintRegistry();
 
 for (const diagnostic of diagnostics) {
 	const marker = diagnostic.level === "error" ? "✗" : "⚠";
-	console.error(`${marker} ${diagnostic.capability}: ${diagnostic.message}`);
+	console.error(`${marker} ${diagnostic.entity}: ${diagnostic.message}`);
 }
 
 const errors = diagnostics.filter((diagnostic) => diagnostic.level === "error");
@@ -103,6 +102,6 @@ if (errors.length > 0) {
 
 console.log(
 	diagnostics.length === 0
-		? "✓ Nazare capability registry is consistent."
-		: `✓ Nazare capability registry passed with ${diagnostics.length} warning(s).`,
+		? "✓ Nazare registry is consistent."
+		: `✓ Nazare registry passed with ${diagnostics.length} warning(s).`,
 );
