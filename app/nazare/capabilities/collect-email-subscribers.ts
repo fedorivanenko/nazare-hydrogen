@@ -6,6 +6,10 @@ import { defineCapability } from "../registry/schema";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function validateEmail(email: string) {
+	return EMAIL_PATTERN.test(email);
+}
+
 export const collectEmailSubscribers = defineCapability({
 	id: "collect-email-subscribers",
 	intent: "Collect visitor email addresses for future marketing communication",
@@ -41,13 +45,11 @@ export const collectEmailSubscribers = defineCapability({
 	],
 
 	policy: {
-		validate(email: string) {
-			return EMAIL_PATTERN.test(email);
-		},
+		validate: validateEmail,
 	},
 
 	async execute(email: string, env: ResendConnectorEnv) {
-		if (!this.policy.validate(email)) {
+		if (!validateEmail(email)) {
 			return { ok: false as const, error: "Enter a valid email address." };
 		}
 
