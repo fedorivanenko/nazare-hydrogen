@@ -1,11 +1,10 @@
-import { heroContract } from "../carcass/sections/Hero";
+import { getEntity, listCarcass } from "./index";
 
-const surfaces = [heroContract] as const;
-
-export const surfaceRegistry = new Map(
-	surfaces.map((surface) => [surface.id, surface]),
-);
+export function listSurfaces() {
+	return listCarcass();
+}
 
 export function getSurface(id: string) {
-	return surfaceRegistry.get(id) ?? null;
+	const entity = getEntity(id);
+	return entity?.kind === "carcass" ? entity : null;
 }
