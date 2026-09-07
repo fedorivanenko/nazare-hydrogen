@@ -315,18 +315,34 @@ async function executeAgentTool(call: AgentToolCall) {
   }
 }
 
-function providerApiKey() {
-  return PROVIDER === 'openrouter' ? OPENROUTER_API_KEY : GROQ_API_KEY;
+function providerApiKey(provider: LlmProvider = PROVIDER) {
+  return provider === 'openrouter' ? OPENROUTER_API_KEY : GROQ_API_KEY;
 }
 
-function providerBaseUrl() {
-  return PROVIDER === 'openrouter' ? OPENROUTER_BASE_URL : GROQ_BASE_URL;
+function providerBaseUrl(provider: LlmProvider = PROVIDER) {
+  return provider === 'openrouter' ? OPENROUTER_BASE_URL : GROQ_BASE_URL;
 }
 
-async function llmCompletion(model: string, messages: AgentMessage[], reasoningEffort: string, maxTokens: number) {
-  const apiKey = providerApiKey();
+const OPENROUTER_FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL ?? 'openrouter/free';
+const GROQ_FALLBACK_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-20b';
+const EMPTY_MESSAGE_RETRIES = Math.max(0, Number(process.env.LLM_EMPTY_MESSAGE_RETRIES ?? 2));
+
+type CompletionRoute = {provider: LlmProvider; model: string};
+
+function completionRoutes(model: string, allowFallback: boolean): CompletionRoute[] {
+  const routes: CompletionRoute[] = [{provider: PROVIDER, model}];
+  if (!allowFallback || PROVIDER !== 'openrouter') return routes;
+  if (OPENROUTER_API_KEY && model !== OPENROUTER_FALLBACK_MODEL) {
+    routes.push({provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL});
+  }
+  if (GROQ_API_KEY) routes.push({provider: 'groq', model: GROQ_FALLBACK_MODEL});
+  return routes;
+}
+
+async function llmCompletion(provider: LlmProvider, model: string, messages: AgentMessage[], reasoningEffort: string, maxTokens: number) {
+  const apiKey = providerApiKey(provider);
   if (!apiKey) {
-    throw new Error((PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY') + ' is not configured');
+    throw new Error((provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY') + ' is not configured');
   }
 
   for (let attempt = 0; attempt <= MAX_PROVIDER_RETRIES; attempt++) {
@@ -334,7 +350,7 @@ async function llmCompletion(model: string, messages: AgentMessage[], reasoningE
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
     };
-    if (PROVIDER === 'groq') headers['Groq-Beta'] = 'inference-metrics';
+    if (provider === 'groq') headers['Groq-Beta'] = 'inference-metrics';
 
     const body: Record<string, unknown> = {
       model,
@@ -344,9 +360,9 @@ async function llmCompletion(model: string, messages: AgentMessage[], reasoningE
       temperature: 0.1,
       max_tokens: maxTokens,
     };
-    if (PROVIDER === 'groq') body.reasoning_effort = reasoningEffort;
+    if (provider === 'groq') body.reasoning_effort = reasoningEffort;
 
-    const response = await fetch(`${providerBaseUrl()}/chat/completions`, {
+    const response = await fetch(`${providerBaseUrl(provider)}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -354,13 +370,36 @@ async function llmCompletion(model: string, messages: AgentMessage[], reasoningE
     const text = await response.text();
     if (response.ok) return JSON.parse(text) as any;
     if (response.status !== 429 || attempt === MAX_PROVIDER_RETRIES) {
-      throw new Error(`${PROVIDER} ${response.status}: ${text}`);
+      throw new Error(`${provider} ${response.status}: ${text}`);
     }
     const retryAfterHeader = response.headers.get('retry-after');
     const retryAfter = Number(retryAfterHeader ?? 2);
     await new Promise(resolve => setTimeout(resolve, Math.max(1, Number.isFinite(retryAfter) ? retryAfter : 2) * 1000));
   }
-  throw new Error(`${PROVIDER} retry loop exhausted`);
+  throw new Error(`${provider} retry loop exhausted`);
+}
+
+async function completionWithFallback(model: string, messages: AgentMessage[], reasoningEffort: string, maxTokens: number, allowFallback: boolean) {
+  const attempts: Array<{provider: LlmProvider; model: string; attempt: number; error?: string}> = [];
+  let lastError = 'No completion route succeeded';
+  for (const route of completionRoutes(model, allowFallback)) {
+    for (let attempt = 0; attempt <= EMPTY_MESSAGE_RETRIES; attempt++) {
+      try {
+        const response = await llmCompletion(route.provider, route.model, messages, reasoningEffort, maxTokens);
+        if (response?.choices?.[0]?.message) {
+          attempts.push({provider: route.provider, model: route.model, attempt});
+          return {response, route, attempts};
+        }
+        lastError = `${route.provider}/${route.model} returned no assistant message`;
+        attempts.push({provider: route.provider, model: route.model, attempt, error: lastError});
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        attempts.push({provider: route.provider, model: route.model, attempt, error: lastError});
+        break;
+      }
+    }
+  }
+  throw new Error(`${lastError}; attempts=${JSON.stringify(attempts)}`);
 }
 async function runAgent(args: Record<string, unknown>) {
   if (activeAgentRun) throw new Error(`Agent run already active: ${activeAgentRun}`);
@@ -369,6 +408,7 @@ async function runAgent(args: Record<string, unknown>) {
   const instruction = String(args.instruction ?? '').trim();
   if (!instruction) throw new Error('instruction is required');
   const model = typeof args.model === 'string' && args.model.trim() ? args.model.trim() : DEFAULT_MODEL;
+  const allowFallback = args.allowFallback !== false;
   const reasoningEffort = typeof args.reasoningEffort === 'string' && args.reasoningEffort.trim()
     ? args.reasoningEffort.trim()
     : 'low';
@@ -406,9 +446,10 @@ async function runAgent(args: Record<string, unknown>) {
 
   try {
     for (steps = 1; steps <= maxSteps; steps++) {
-      const response = await llmCompletion(model, messages, reasoningEffort, maxTokens);
+      const completion = await completionWithFallback(model, messages, reasoningEffort, maxTokens, allowFallback);
+      const {response, route, attempts} = completion;
+      trace.push({step: steps, type: 'completion-route', provider: route.provider, model: route.model, attempts});
       const message = response?.choices?.[0]?.message;
-      if (!message) throw new Error(PROVIDER + ' returned no assistant message');
 
       totalInputTokens += Number(response?.usage?.prompt_tokens ?? 0);
       totalOutputTokens += Number(response?.usage?.completion_tokens ?? 0);
@@ -453,6 +494,7 @@ async function runAgent(args: Record<string, unknown>) {
       provider: PROVIDER,
       model,
       reasoningEffort,
+      allowFallback,
       maxTokens,
       maxSteps,
       instruction,
@@ -485,7 +527,7 @@ async function runAgent(args: Record<string, unknown>) {
     const status = await workspaceStatus().catch(() => null);
     const errorText = error instanceof Error ? error.message : String(error);
     const metadata = {
-      id: runId, provider: PROVIDER, model, reasoningEffort, maxTokens, maxSteps, instruction,
+      id: runId, provider: PROVIDER, model, reasoningEffort, allowFallback, maxTokens, maxSteps, instruction,
       startedAt, finishedAt: new Date().toISOString(), durationMs: Date.now() - started, steps,
       usage: {inputTokens: totalInputTokens, outputTokens: totalOutputTokens, totalTokens},
       inferenceSeconds, toolCalls: trace.filter((event: any) => event?.type === 'tool').length,
@@ -562,6 +604,7 @@ const tools = [
       properties: {
         instruction: {type: 'string'},
         model: {type: 'string', description: 'Provider model id; defaults to OPENROUTER_MODEL/Nemotron free for OpenRouter or GROQ_MODEL for Groq'},
+        allowFallback: {type: 'boolean', description: 'Retry empty completions, then fall back to OpenRouter free router and Groq; defaults to true'},
         reasoningEffort: {type: 'string', enum: ['low', 'medium', 'high']},
         maxSteps: {type: 'number', minimum: 1, maximum: MAX_AGENT_STEPS},
         maxTokens: {type: 'number', minimum: 128, maximum: 2000, description: 'Maximum completion tokens per model turn'},
