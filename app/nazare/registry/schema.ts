@@ -36,6 +36,21 @@ export type CapabilityEvidence = {
 	description: string;
 };
 
+export type CapabilityBindingInput = {
+	name: string;
+	evidence: string;
+};
+
+export type CapabilityBinding = {
+	id: `binding.${string}`;
+	kind: "route-action" | "component" | "event-handler";
+	sourceFile: string;
+	surface: CarcassId;
+	handler: string;
+	invocation: string;
+	inputs: readonly CapabilityBindingInput[];
+};
+
 export type CapabilityDefinition = RegistryEntityBase<
 	"capability",
 	CapabilityId
@@ -44,6 +59,7 @@ export type CapabilityDefinition = RegistryEntityBase<
 	providers: readonly CapabilityProviderRef[];
 	policies: readonly CapabilityPolicy[];
 	evidence: readonly CapabilityEvidence[];
+	bindings: readonly CapabilityBinding[];
 };
 
 export type CarcassDefinition = RegistryEntityBase<"carcass", CarcassId> & {

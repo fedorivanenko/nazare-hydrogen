@@ -35,7 +35,7 @@ export function expandEntity(id: string) {
 					neighbor !== null,
 			);
 
-		return { entity, neighbors };
+		return { entity, neighbors, bindings: entity.bindings };
 	}
 
 	const relatedCapabilities = listCapabilities().filter((capability) =>
@@ -47,7 +47,7 @@ export function expandEntity(id: string) {
 	return { entity, neighbors: relatedCapabilities };
 }
 
-export function planCapabilityChange(id: string, requestedChange: string) {
+export function compileCapabilityTask(id: string, requestedChange: string) {
 	const capability = getCapability(id);
 
 	if (!capability) {
@@ -57,17 +57,57 @@ export function planCapabilityChange(id: string, requestedChange: string) {
 		};
 	}
 
+	const surfaces = capability.surfaces
+		.map((ref) => getEntity(ref.id))
+		.filter((entity) => entity?.kind === "carcass");
+	const providers = capability.providers.map((ref) => ({
+		ref,
+		entity: getEntity(ref.id),
+	}));
+	const sourceFiles = Array.from(
+		new Set([
+			...capability.sourceFiles,
+			...surfaces.flatMap((surface) => surface?.sourceFiles ?? []),
+			...providers.flatMap(({ entity }) => entity?.sourceFiles ?? []),
+			...capability.bindings.map((binding) => binding.sourceFile),
+		]),
+	);
+
 	return {
 		ok: true as const,
-		capability: {
+		task: requestedChange,
+		target: {
 			id: capability.id,
 			intent: capability.intent,
 		},
-		requestedChange,
-		affectedSurfaces: capability.surfaces,
-		affectedProviders: capability.providers,
-		policiesToPreserve: capability.policies,
-		requiredEvidence: capability.evidence,
-		sourceFiles: capability.sourceFiles,
+		sourceFiles,
+		executableBindings: capability.bindings,
+		constraints: {
+			policies: capability.policies,
+			requiredEvidence: capability.evidence,
+			surfaces: surfaces.map((surface) => ({
+				id: surface?.id,
+				constraints: surface?.kind === "carcass" ? surface.constraints ?? [] : [],
+			})),
+			providers: providers.map(({ ref, entity }) => ({
+				id: ref.id,
+				action: ref.action,
+				intent: entity?.intent,
+			})),
+		},
+		verify: [
+			"Preserve every declared capability policy.",
+			"Preserve every required evidence contract.",
+			"Keep provider-specific behavior out of Carcass components.",
+			"Keep every executable binding consistent with the capability invocation.",
+			"Run npm run lint.",
+			"Run npm test.",
+			"Run npm run typecheck.",
+			"Run npm run build.",
+		],
 	};
+}
+
+export function planCapabilityChange(id: string, requestedChange: string) {
+	return compileCapabilityTask(id, requestedChange);
 }
