@@ -18,7 +18,10 @@ const MAX_BODY_BYTES = 1_000_000;
 const MAX_OUTPUT_BYTES = 2_000_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_TIMEOUT_MS = 30 * 60 * 1000;
-const MAX_AGENT_STEPS = 48;
+const MAX_AGENT_STEPS = 24;
+const DEFAULT_MAX_TOKENS = Number(process.env.GROQ_MAX_TOKENS ?? 700);
+const MAX_TOOL_CONTEXT_CHARS = 12_000;
+const GROQ_MAX_RETRIES = 2;
 
 let activeAgentRun: string | null = null;
 
@@ -145,7 +148,9 @@ function safeRepoPath(relativePath: string) {
 async function ensureWorkspace() {
   await mkdir(ROOT_DIR, {recursive: true});
   await mkdir(RESULTS_DIR, {recursive: true});
-  if (existsSync(path.join(REPO_DIR, '.git'))) return;
+  const hasGit = existsSync(path.join(REPO_DIR, '.git'));
+  const hasSource = existsSync(path.join(REPO_DIR, 'package.json')) && existsSync(path.join(REPO_DIR, 'app'));
+  if (hasGit && hasSource) return;
 
   await rm(REPO_DIR, {recursive: true, force: true});
   await mkdir(REPO_DIR, {recursive: true});
@@ -208,6 +213,8 @@ const groqTools = [
         required: ['path'],
         properties: {
           path: {type: 'string', description: 'Repository-relative file path'},
+          startLine: {type: 'number', minimum: 1, description: 'Optional 1-based first line'},
+          endLine: {type: 'number', minimum: 1, description: 'Optional 1-based last line'},
         },
         additionalProperties: false,
       },
@@ -216,15 +223,12 @@ const groqTools = [
   {
     type: 'function',
     function: {
-      name: 'write_file',
-      description: 'Replace a UTF-8 file in the repository with complete new contents. Creates parent directories if needed.',
+      name: 'apply_patch',
+      description: 'Apply a unified diff patch to repository files. Prefer this over rewriting whole files.',
       parameters: {
         type: 'object',
-        required: ['path', 'content'],
-        properties: {
-          path: {type: 'string', description: 'Repository-relative file path'},
-          content: {type: 'string', description: 'Complete replacement file contents'},
-        },
+        required: ['patch'],
+        properties: { patch: {type: 'string', description: 'Unified diff patch relative to repository root'} },
         additionalProperties: false,
       },
     },
@@ -261,19 +265,23 @@ async function executeGroqTool(call: GroqToolCall) {
       if (!relativePath) return {ok: false, error: 'path is required'};
       try {
         const content = await readFile(safeRepoPath(relativePath), 'utf8');
-        return {ok: true, path: relativePath, content: tail(content, 120_000)};
+        const lines = content.split('\n');
+        const startLine = Math.max(Number(args.startLine ?? 1), 1);
+        const endLine = Math.max(Number(args.endLine ?? Math.min(lines.length, startLine + 199)), startLine);
+        const excerpt = lines.slice(startLine - 1, endLine).join('\n');
+        return {ok: true, path: relativePath, startLine, endLine: Math.min(endLine, lines.length), content: tail(excerpt, MAX_TOOL_CONTEXT_CHARS)};
       } catch (error) {
         return {ok: false, error: String(error)};
       }
     }
-    case 'write_file': {
-      const relativePath = String(args.path ?? '');
-      if (!relativePath) return {ok: false, error: 'path is required'};
-      const content = String(args.content ?? '');
-      const target = safeRepoPath(relativePath);
-      await mkdir(path.dirname(target), {recursive: true});
-      await writeFile(target, content, 'utf8');
-      return {ok: true, path: relativePath, bytes: Buffer.byteLength(content)};
+    case 'apply_patch': {
+      const patchText = String(args.patch ?? '');
+      if (!patchText.trim()) return {ok: false, error: 'patch is required'};
+      const patchPath = path.join(ROOT_DIR, '.wind-tunnel-agent.patch');
+      await writeFile(patchPath, patchText, 'utf8');
+      const result = await runShell(`git apply --whitespace=nowarn ${JSON.stringify(patchPath)}`);
+      await rm(patchPath, {force: true});
+      return {ok: result.exitCode === 0, exitCode: result.exitCode, stdout: tail(result.stdout, 4000), stderr: tail(result.stderr, 4000)};
     }
     case 'exec': {
       const command = String(args.command ?? '').trim();
@@ -284,8 +292,8 @@ async function executeGroqTool(call: GroqToolCall) {
         exitCode: result.exitCode,
         timedOut: result.timedOut,
         durationMs: result.durationMs,
-        stdout: tail(result.stdout, 80_000),
-        stderr: tail(result.stderr, 40_000),
+        stdout: tail(result.stdout, MAX_TOOL_CONTEXT_CHARS),
+        stderr: tail(result.stderr, 6_000),
       };
     }
     default:
@@ -293,28 +301,30 @@ async function executeGroqTool(call: GroqToolCall) {
   }
 }
 
-async function groqCompletion(model: string, messages: GroqMessage[], reasoningEffort: string) {
+async function groqCompletion(model: string, messages: GroqMessage[], reasoningEffort: string, maxTokens: number) {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
-  const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${GROQ_API_KEY}`,
-      'content-type': 'application/json',
-      'Groq-Beta': 'inference-metrics',
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools: groqTools,
-      tool_choice: 'auto',
-      reasoning_effort: reasoningEffort,
-      temperature: 0.1,
-    }),
-  });
 
-  const text = await response.text();
-  if (!response.ok) throw new Error(`Groq ${response.status}: ${text}`);
-  return JSON.parse(text) as any;
+  for (let attempt = 0; attempt <= GROQ_MAX_RETRIES; attempt++) {
+    const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${GROQ_API_KEY}`,
+        'content-type': 'application/json',
+        'Groq-Beta': 'inference-metrics',
+      },
+      body: JSON.stringify({
+        model, messages, tools: groqTools, tool_choice: 'auto',
+        reasoning_effort: reasoningEffort, temperature: 0.1, max_tokens: maxTokens,
+      }),
+    });
+    const text = await response.text();
+    if (response.ok) return JSON.parse(text) as any;
+    if (response.status !== 429 || attempt === GROQ_MAX_RETRIES) throw new Error(`Groq ${response.status}: ${text}`);
+    const retryAfterHeader = response.headers.get('retry-after');
+    const retryAfter = Number(retryAfterHeader ?? 2);
+    await new Promise(resolve => setTimeout(resolve, Math.max(1, Number.isFinite(retryAfter) ? retryAfter : 2) * 1000));
+  }
+  throw new Error('Groq retry loop exhausted');
 }
 
 async function runAgent(args: Record<string, unknown>) {
@@ -327,7 +337,8 @@ async function runAgent(args: Record<string, unknown>) {
   const reasoningEffort = typeof args.reasoningEffort === 'string' && args.reasoningEffort.trim()
     ? args.reasoningEffort.trim()
     : 'low';
-  const maxSteps = Math.min(Math.max(Number(args.maxSteps ?? 32), 1), MAX_AGENT_STEPS);
+  const maxSteps = Math.min(Math.max(Number(args.maxSteps ?? 12), 1), MAX_AGENT_STEPS);
+  const maxTokens = Math.min(Math.max(Number(args.maxTokens ?? DEFAULT_MAX_TOKENS), 128), 2_000);
   const runId = randomUUID();
   activeAgentRun = runId;
   const runDir = path.join(RESULTS_DIR, runId);
@@ -360,7 +371,7 @@ async function runAgent(args: Record<string, unknown>) {
 
   try {
     for (steps = 1; steps <= maxSteps; steps++) {
-      const response = await groqCompletion(model, messages, reasoningEffort);
+      const response = await groqCompletion(model, messages, reasoningEffort, maxTokens);
       const message = response?.choices?.[0]?.message;
       if (!message) throw new Error('Groq returned no assistant message');
 
@@ -390,8 +401,13 @@ async function runAgent(args: Record<string, unknown>) {
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: JSON.stringify(result),
+          content: tail(JSON.stringify(result), MAX_TOOL_CONTEXT_CHARS),
         });
+        if (messages.length > 10) {
+          const fixed = messages.slice(0, 2);
+          const recent = messages.slice(-8);
+          messages.splice(0, messages.length, ...fixed, ...recent);
+        }
       }
     }
 
@@ -402,6 +418,8 @@ async function runAgent(args: Record<string, unknown>) {
       provider: 'groq',
       model,
       reasoningEffort,
+      maxTokens,
+      maxSteps,
       instruction,
       startedAt,
       finishedAt: new Date().toISOString(),
@@ -427,6 +445,24 @@ async function runAgent(args: Record<string, unknown>) {
       finalText: tail(finalText),
       diff: tail(diff, 120_000),
     };
+  } catch (error) {
+    const diff = await gitDiff().catch(() => '');
+    const status = await workspaceStatus().catch(() => null);
+    const errorText = error instanceof Error ? error.message : String(error);
+    const metadata = {
+      id: runId, provider: 'groq', model, reasoningEffort, maxTokens, maxSteps, instruction,
+      startedAt, finishedAt: new Date().toISOString(), durationMs: Date.now() - started, steps,
+      usage: {inputTokens: totalInputTokens, outputTokens: totalOutputTokens, totalTokens},
+      inferenceSeconds, toolCalls: trace.filter((event: any) => event?.type === 'tool').length,
+      status, diffBytes: Buffer.byteLength(diff), completed: false, error: errorText,
+    };
+    await Promise.all([
+      writeFile(path.join(runDir, 'trace.json'), JSON.stringify(trace, null, 2)),
+      writeFile(path.join(runDir, 'final.txt'), ''),
+      writeFile(path.join(runDir, 'diff.patch'), diff),
+      writeFile(path.join(runDir, 'metadata.json'), JSON.stringify(metadata, null, 2)),
+    ]);
+    throw new Error(`Agent run ${runId} failed: ${errorText}`);
   } finally {
     activeAgentRun = null;
   }
@@ -493,6 +529,7 @@ const tools = [
         model: {type: 'string', description: 'Groq model id; defaults to GROQ_MODEL or openai/gpt-oss-20b'},
         reasoningEffort: {type: 'string', enum: ['low', 'medium', 'high']},
         maxSteps: {type: 'number', minimum: 1, maximum: MAX_AGENT_STEPS},
+        maxTokens: {type: 'number', minimum: 128, maximum: 2000, description: 'Maximum completion tokens per Groq turn'},
       },
       additionalProperties: false,
     },
