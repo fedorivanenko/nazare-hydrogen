@@ -1,11 +1,6 @@
 import { Form } from "react-router";
 
-export const heroContract = {
-	id: "carcass.section.hero",
-	intent: "Introduce the primary message and action for a page",
-	props: ["eyebrow", "heading", "body", "emailCapture"] as const,
-	constraints: ["heading-required"] as const,
-};
+export { heroDefinition as heroContract } from "../../registry/definitions";
 
 type HeroProps = {
 	eyebrow?: string;

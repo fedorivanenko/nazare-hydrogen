@@ -1,0 +1,15 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+	"files": {
+		"includes": ["**", "!node_modules", "!build", "!dist", "!.react-router"]
+	},
+	"linter": {
+		"enabled": true
+	},
+	"plugins": [
+		{
+			"path": "./app/nazare/lint/no-provider-import-from-carcass.grit",
+			"includes": ["app/nazare/carcass/**/*.ts", "app/nazare/carcass/**/*.tsx"]
+		}
+	]
+}

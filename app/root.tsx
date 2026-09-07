@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
-import { Links, Meta, Scripts, ScrollRestoration, useActionData } from "react-router";
-import { Hero } from "./nazare/carcass/sections/Hero";
+import {
+	Links,
+	Meta,
+	Scripts,
+	ScrollRestoration,
+	useActionData,
+} from "react-router";
 import { collectEmailSubscribers } from "./nazare/capabilities/collect-email-subscribers";
+import { Hero } from "./nazare/carcass/sections/Hero";
 import type { ResendConnectorEnv } from "./nazare/connectors/resend.server";
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -52,11 +58,7 @@ export default function App() {
 			body="A minimal Carcass section with a business capability attached through a connector."
 			emailCapture={{ buttonLabel: "Join the list" }}
 			message={
-				result?.ok
-					? "Subscribed."
-					: result?.error
-						? result.error
-						: undefined
+				result?.ok ? "Subscribed." : result?.error ? result.error : undefined
 			}
 		/>
 	);
