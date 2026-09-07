@@ -10,7 +10,8 @@
 		"test": "tsx --test app/nazare/registry/index.test.ts",
 		"lint:biome": "biome check .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
-		"lint": "npm run lint:biome && npm run lint:nazare"
+		"lint": "npm run lint:biome && npm run lint:nazare",
+		"nazare:registry": "tsx app/nazare/registry/cli.ts"
 	},
 	"dependencies": {
 		"@shopify/hydrogen": "2026.4.5",
