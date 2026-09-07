@@ -13,15 +13,26 @@ const RESULTS_DIR = process.env.WIND_TUNNEL_RESULTS_DIR ?? path.join(ROOT_DIR, '
 const TOKEN = process.env.WIND_TUNNEL_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_BASE_URL = process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1';
-const DEFAULT_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-20b';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
+type LlmProvider = 'groq' | 'openrouter';
+const requestedProvider = process.env.LLM_PROVIDER;
+if (requestedProvider && requestedProvider !== 'groq' && requestedProvider !== 'openrouter') {
+  throw new Error("Unsupported LLM_PROVIDER: " + requestedProvider);
+}
+const PROVIDER: LlmProvider = (requestedProvider as LlmProvider | undefined)
+  ?? (OPENROUTER_API_KEY ? 'openrouter' : 'groq');
+const DEFAULT_MODEL = PROVIDER === 'openrouter'
+  ? (process.env.OPENROUTER_MODEL ?? 'nvidia/nemotron-3-ultra-550b-a55b:free')
+  : (process.env.GROQ_MODEL ?? 'openai/gpt-oss-20b');
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_OUTPUT_BYTES = 2_000_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_AGENT_STEPS = 24;
-const DEFAULT_MAX_TOKENS = Number(process.env.GROQ_MAX_TOKENS ?? 700);
+const DEFAULT_MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS ?? process.env.GROQ_MAX_TOKENS ?? 700);
 const MAX_TOOL_CONTEXT_CHARS = 12_000;
-const GROQ_MAX_RETRIES = 2;
+const MAX_PROVIDER_RETRIES = 2;
 
 let activeAgentRun: string | null = null;
 
@@ -43,16 +54,16 @@ type ProcessResult = {
   timedOut: boolean;
 };
 
-type GroqToolCall = {
+type AgentToolCall = {
   id: string;
   type: 'function';
   function: {name: string; arguments: string};
 };
 
-type GroqMessage = {
+type AgentMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content?: string | null;
-  tool_calls?: GroqToolCall[];
+  tool_calls?: AgentToolCall[];
   tool_call_id?: string;
 };
 
@@ -183,6 +194,9 @@ async function workspaceStatus() {
     head: head.stdout.trim(),
     status: statusResult.stdout,
     activeAgentRun,
+    provider: PROVIDER,
+    providerConfigured: Boolean(providerApiKey()),
+    openrouterConfigured: Boolean(OPENROUTER_API_KEY),
     groqConfigured: Boolean(GROQ_API_KEY),
     defaultModel: DEFAULT_MODEL,
   };
@@ -202,7 +216,7 @@ async function gitDiff() {
   return result.stdout;
 }
 
-const groqTools = [
+const agentTools = [
   {
     type: 'function',
     function: {
@@ -251,7 +265,7 @@ const groqTools = [
   },
 ] as const;
 
-async function executeGroqTool(call: GroqToolCall) {
+async function executeAgentTool(call: AgentToolCall) {
   let args: Record<string, unknown> = {};
   try {
     args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>;
@@ -301,35 +315,56 @@ async function executeGroqTool(call: GroqToolCall) {
   }
 }
 
-async function groqCompletion(model: string, messages: GroqMessage[], reasoningEffort: string, maxTokens: number) {
-  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
+function providerApiKey() {
+  return PROVIDER === 'openrouter' ? OPENROUTER_API_KEY : GROQ_API_KEY;
+}
 
-  for (let attempt = 0; attempt <= GROQ_MAX_RETRIES; attempt++) {
-    const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+function providerBaseUrl() {
+  return PROVIDER === 'openrouter' ? OPENROUTER_BASE_URL : GROQ_BASE_URL;
+}
+
+async function llmCompletion(model: string, messages: AgentMessage[], reasoningEffort: string, maxTokens: number) {
+  const apiKey = providerApiKey();
+  if (!apiKey) {
+    throw new Error((PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY') + ' is not configured');
+  }
+
+  for (let attempt = 0; attempt <= MAX_PROVIDER_RETRIES; attempt++) {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+    };
+    if (PROVIDER === 'groq') headers['Groq-Beta'] = 'inference-metrics';
+
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      tools: agentTools,
+      tool_choice: 'auto',
+      temperature: 0.1,
+      max_tokens: maxTokens,
+    };
+    if (PROVIDER === 'groq') body.reasoning_effort = reasoningEffort;
+
+    const response = await fetch(`${providerBaseUrl()}/chat/completions`, {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${GROQ_API_KEY}`,
-        'content-type': 'application/json',
-        'Groq-Beta': 'inference-metrics',
-      },
-      body: JSON.stringify({
-        model, messages, tools: groqTools, tool_choice: 'auto',
-        reasoning_effort: reasoningEffort, temperature: 0.1, max_tokens: maxTokens,
-      }),
+      headers,
+      body: JSON.stringify(body),
     });
     const text = await response.text();
     if (response.ok) return JSON.parse(text) as any;
-    if (response.status !== 429 || attempt === GROQ_MAX_RETRIES) throw new Error(`Groq ${response.status}: ${text}`);
+    if (response.status !== 429 || attempt === MAX_PROVIDER_RETRIES) {
+      throw new Error(`${PROVIDER} ${response.status}: ${text}`);
+    }
     const retryAfterHeader = response.headers.get('retry-after');
     const retryAfter = Number(retryAfterHeader ?? 2);
     await new Promise(resolve => setTimeout(resolve, Math.max(1, Number.isFinite(retryAfter) ? retryAfter : 2) * 1000));
   }
-  throw new Error('Groq retry loop exhausted');
+  throw new Error(`${PROVIDER} retry loop exhausted`);
 }
-
 async function runAgent(args: Record<string, unknown>) {
   if (activeAgentRun) throw new Error(`Agent run already active: ${activeAgentRun}`);
-  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
+  if (!providerApiKey()) throw new Error((PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY') + ' is not configured');
 
   const instruction = String(args.instruction ?? '').trim();
   if (!instruction) throw new Error('instruction is required');
@@ -347,7 +382,7 @@ async function runAgent(args: Record<string, unknown>) {
   const startedAt = new Date().toISOString();
   const started = Date.now();
   const trace: unknown[] = [];
-  const messages: GroqMessage[] = [
+  const messages: AgentMessage[] = [
     {
       role: 'system',
       content: [
@@ -371,19 +406,19 @@ async function runAgent(args: Record<string, unknown>) {
 
   try {
     for (steps = 1; steps <= maxSteps; steps++) {
-      const response = await groqCompletion(model, messages, reasoningEffort, maxTokens);
+      const response = await llmCompletion(model, messages, reasoningEffort, maxTokens);
       const message = response?.choices?.[0]?.message;
-      if (!message) throw new Error('Groq returned no assistant message');
+      if (!message) throw new Error(PROVIDER + ' returned no assistant message');
 
       totalInputTokens += Number(response?.usage?.prompt_tokens ?? 0);
       totalOutputTokens += Number(response?.usage?.completion_tokens ?? 0);
       totalTokens += Number(response?.usage?.total_tokens ?? 0);
       inferenceSeconds += Number(response?.metadata?.total_time ?? 0);
 
-      const assistant: GroqMessage = {
+      const assistant: AgentMessage = {
         role: 'assistant',
         content: typeof message.content === 'string' ? message.content : null,
-        ...(Array.isArray(message.tool_calls) ? {tool_calls: message.tool_calls as GroqToolCall[]} : {}),
+        ...(Array.isArray(message.tool_calls) ? {tool_calls: message.tool_calls as AgentToolCall[]} : {}),
       };
       messages.push(assistant);
       trace.push({step: steps, type: 'assistant', content: assistant.content, toolCalls: assistant.tool_calls ?? [], usage: response?.usage ?? null, metrics: response?.metadata ?? null});
@@ -396,7 +431,7 @@ async function runAgent(args: Record<string, unknown>) {
 
       for (const call of calls) {
         const toolStarted = Date.now();
-        const result = await executeGroqTool(call);
+        const result = await executeAgentTool(call);
         trace.push({step: steps, type: 'tool', id: call.id, name: call.function.name, arguments: call.function.arguments, durationMs: Date.now() - toolStarted, result});
         messages.push({
           role: 'tool',
@@ -415,7 +450,7 @@ async function runAgent(args: Record<string, unknown>) {
     const status = await workspaceStatus();
     const metadata = {
       id: runId,
-      provider: 'groq',
+      provider: PROVIDER,
       model,
       reasoningEffort,
       maxTokens,
@@ -450,7 +485,7 @@ async function runAgent(args: Record<string, unknown>) {
     const status = await workspaceStatus().catch(() => null);
     const errorText = error instanceof Error ? error.message : String(error);
     const metadata = {
-      id: runId, provider: 'groq', model, reasoningEffort, maxTokens, maxSteps, instruction,
+      id: runId, provider: PROVIDER, model, reasoningEffort, maxTokens, maxSteps, instruction,
       startedAt, finishedAt: new Date().toISOString(), durationMs: Date.now() - started, steps,
       usage: {inputTokens: totalInputTokens, outputTokens: totalOutputTokens, totalTokens},
       inferenceSeconds, toolCalls: trace.filter((event: any) => event?.type === 'tool').length,
@@ -488,7 +523,7 @@ async function getRun(id: string) {
 const tools = [
   {
     name: 'workspace_status',
-    description: 'Inspect the persistent Nazare wind-tunnel worktree, Groq configuration, and active agent state.',
+    description: 'Inspect the persistent Nazare wind-tunnel worktree, model-provider configuration, and active agent state.',
     inputSchema: {type: 'object', properties: {}, additionalProperties: false},
   },
   {
@@ -520,23 +555,23 @@ const tools = [
   },
   {
     name: 'run_agent',
-    description: 'Run the Groq-backed coding agent against the writable worktree. The agent can read, write, search and execute verification commands.',
+    description: 'Run the configured model-backed coding agent against the writable worktree. The agent can read, write, search and execute verification commands.',
     inputSchema: {
       type: 'object',
       required: ['instruction'],
       properties: {
         instruction: {type: 'string'},
-        model: {type: 'string', description: 'Groq model id; defaults to GROQ_MODEL or openai/gpt-oss-20b'},
+        model: {type: 'string', description: 'Provider model id; defaults to OPENROUTER_MODEL/Nemotron free for OpenRouter or GROQ_MODEL for Groq'},
         reasoningEffort: {type: 'string', enum: ['low', 'medium', 'high']},
         maxSteps: {type: 'number', minimum: 1, maximum: MAX_AGENT_STEPS},
-        maxTokens: {type: 'number', minimum: 128, maximum: 2000, description: 'Maximum completion tokens per Groq turn'},
+        maxTokens: {type: 'number', minimum: 128, maximum: 2000, description: 'Maximum completion tokens per model turn'},
       },
       additionalProperties: false,
     },
   },
   {
     name: 'get_run',
-    description: 'Read a completed Groq agent run including metadata, trace, final answer and patch.',
+    description: 'Read a completed agent run including metadata, trace, final answer and patch.',
     inputSchema: {
       type: 'object',
       required: ['id'],
@@ -606,7 +641,7 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse) {
           protocolVersion: String(body.params?.protocolVersion ?? '2025-06-18'),
           capabilities: {tools: {listChanged: false}},
           serverInfo: {name: 'nazare-wind-tunnel', version: '0.2.0'},
-          instructions: 'Operate the persistent Nazare benchmark worktree. Reset before controlled runs. run_agent uses Groq local function calling and records full traces and patches.',
+          instructions: 'Operate the persistent Nazare benchmark worktree. Reset before controlled runs. run_agent uses the configured model provider with local function calling and records full traces and patches.',
         }));
         return;
       case 'ping':
@@ -647,6 +682,9 @@ createServer(async (req, res) => {
         ok: repo.isDirectory(),
         repoDir: REPO_DIR,
         tokenConfigured: Boolean(TOKEN),
+        provider: PROVIDER,
+        providerConfigured: Boolean(providerApiKey()),
+        openrouterConfigured: Boolean(OPENROUTER_API_KEY),
         groqConfigured: Boolean(GROQ_API_KEY),
         defaultModel: DEFAULT_MODEL,
       });
@@ -663,7 +701,7 @@ createServer(async (req, res) => {
 
   json(res, 404, {error: 'not found'});
 }).listen(PORT, '0.0.0.0', () => {
-  console.log(`Nazare Groq wind tunnel MCP listening on :${PORT}`);
+  console.log(`Nazare wind tunnel MCP listening on :${PORT}`);
   console.log(`Workspace: ${REPO_DIR}`);
-  console.log(`Groq configured: ${Boolean(GROQ_API_KEY)}; model: ${DEFAULT_MODEL}`);
+  console.log(`Provider: ${PROVIDER}; configured: ${Boolean(providerApiKey())}; model: ${DEFAULT_MODEL}`);
 });
