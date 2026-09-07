@@ -22,11 +22,28 @@ export const collectEmailSubscribersDefinition = defineCapability({
 			description: "Resend confirms that the contact was created",
 		},
 	],
+	bindings: [
+		{
+			id: "binding.route.root.hero-email-signup",
+			kind: "route-action",
+			sourceFile: "app/root.tsx",
+			surface: "carcass.section.hero",
+			handler: "export async function action",
+			invocation: "collectEmailSubscribers.execute(email, context.env)",
+			inputs: [
+				{
+					name: "email",
+					evidence: 'formData.get("email")',
+				},
+			],
+		},
+	],
 	sourceFiles: [
 		"app/nazare/registry/definitions.ts",
 		"app/nazare/capabilities/collect-email-subscribers.ts",
 		"app/nazare/carcass/sections/Hero.tsx",
 		"app/nazare/connectors/resend.server.ts",
+		"app/root.tsx",
 	],
 });
 
