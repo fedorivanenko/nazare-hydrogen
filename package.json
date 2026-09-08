@@ -8,7 +8,7 @@
 		"build": "shopify hydrogen build",
 		"typecheck": "react-router typegen && tsc --noEmit",
 		"test": "tsx --test app/nazare/registry/index.test.ts",
-		"lint:biome": "biome check .",
+		"lint:biome": "biome lint .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
 		"lint": "npm run lint:biome && npm run lint:nazare",
 		"nazare:registry": "tsx app/nazare/registry/cli.ts",
@@ -35,6 +35,6 @@
 		"vite": "8.2.2"
 	},
 	"engines": {
-		"node": ">=26.0.0 <27"
+		"node": "^24.0.0"
 	}
 }
