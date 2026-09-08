@@ -13,6 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: wind_tunnel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wind_tunnel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,14 +41,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Postgres client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
       - name: Lint
         run: npm run lint
 
       - name: Test
         run: npm test
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Test Wind Tunnel
+        run: npm run test:wind-tunnel
 
       - name: Build
         run: npm run build
@@ -42,20 +62,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -q "groq-server.ts" tools/wind-tunnel/oauth-gateway.ts; then
-            echo "oauth-gateway.ts must launch server-v2 directly, not the legacy Groq harness"
+          test -f tools/wind-tunnel/control.ts
+          test -f tools/wind-tunnel/worker.ts
+          test -f tools/wind-tunnel/postgres-store.ts
+          test -f tools/wind-tunnel/artifact-store.ts
+          test ! -f tools/wind-tunnel/server-v3.ts
+          test ! -f tools/wind-tunnel/runner.ts
+          test ! -f tools/wind-tunnel/run-store.ts
+          if grep -Eq "spawn\(.*worker|worker\.ts" tools/wind-tunnel/control.ts; then
+            echo "control.ts must never spawn or own the worker"
             exit 1
           fi
-          if grep -q "/workspace/nazare-hydrogen" tools/wind-tunnel/server-v2.ts; then
-            echo "server-v2.ts must not use a persistent repository under /workspace"
+          if grep -q "/workspace/results" tools/wind-tunnel/control.ts tools/wind-tunnel/worker.ts; then
+            echo "durable run state/artifacts must not use the Railway volume filesystem"
             exit 1
           fi
-          if grep -Eq "git tag .*baseline|rev-parse baseline" tools/wind-tunnel/server-v2.ts tools/wind-tunnel/bootstrap.ts; then
-            echo "Wind Tunnel must not maintain a mutable local baseline tag"
+          if ! grep -q "claimNextRun" tools/wind-tunnel/worker.ts; then
+            echo "worker.ts must claim durable jobs from Postgres"
+            exit 1
+          fi
+          if ! grep -q "Promise.all(state.spec.arms.map(runArm))" tools/wind-tunnel/worker.ts; then
+            echo "raw and nazare arms must execute concurrently from the same baseline"
             exit 1
           fi
 
-      - name: Wind Tunnel runtime smoke test
+      - name: Wind Tunnel control runtime smoke test
         shell: bash
         env:
           PORT: "3100"
@@ -63,11 +94,12 @@ jobs:
           WIND_TUNNEL_TOKEN: "ci-wind-tunnel-token"
           WIND_TUNNEL_APP_DIR: ${{ github.workspace }}
           WIND_TUNNEL_ROOT: ${{ runner.temp }}/wind-tunnel-state
-          WIND_TUNNEL_RESULTS_DIR: ${{ runner.temp }}/wind-tunnel-results
           WIND_TUNNEL_RUNTIME_DIR: ${{ runner.temp }}/wind-tunnel-runtime
           WIND_TUNNEL_SOURCE_SHA: ${{ github.sha }}
+          WIND_TUNNEL_SOURCE_REPO: "fedorivanenko/nazare-hydrogen"
           RAILWAY_GIT_COMMIT_SHA: ${{ github.sha }}
           RAILWAY_ENVIRONMENT: "ci"
+          DATABASE_URL: "postgresql://postgres@127.0.0.1:5432/wind_tunnel"
         run: |
           set -euo pipefail
           npx tsx tools/wind-tunnel/bootstrap.ts >"$RUNNER_TEMP/wind-tunnel.log" 2>&1 &
@@ -94,9 +126,12 @@ jobs:
           const upstream = health.upstream ?? health;
           const expectedSha = process.env.GITHUB_SHA;
           if (!upstream.ok) throw new Error(`health not ok: ${JSON.stringify(health)}`);
-          if (upstream.controller !== 'server-v2') throw new Error(`wrong controller: ${upstream.controller}`);
+          if (upstream.controller !== 'wind-tunnel-control') throw new Error(`wrong controller: ${upstream.controller}`);
+          if (upstream.version !== '1.0.0') throw new Error(`wrong version: ${upstream.version}`);
           if (upstream.sourceSha !== expectedSha) throw new Error(`source SHA mismatch: ${upstream.sourceSha} != ${expectedSha}`);
-          if (upstream.railwaySha !== expectedSha) throw new Error(`railway SHA mismatch: ${upstream.railwaySha} != ${expectedSha}`);
-          if (upstream.provider !== 'vercel-ai-gateway') throw new Error(`wrong provider: ${upstream.provider}`);
-          if (upstream.model !== 'openai/gpt-oss-20b') throw new Error(`wrong model: ${upstream.model}`);
+          if (upstream.persistence?.runs !== 'postgres') throw new Error('run persistence must be postgres');
+          if (upstream.persistence?.artifacts !== 's3') throw new Error('artifact persistence must be s3');
           NODE
+
+      - name: Typecheck
+        run: npm run typecheck
