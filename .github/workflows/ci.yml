@@ -32,6 +32,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Test Wind Tunnel
+        run: npm run test:wind-tunnel
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -43,15 +46,19 @@ jobs:
         run: |
           set -euo pipefail
           if grep -q "groq-server.ts" tools/wind-tunnel/oauth-gateway.ts; then
-            echo "oauth-gateway.ts must launch server-v2 directly, not the legacy Groq harness"
+            echo "oauth-gateway.ts must launch the Wind Tunnel MCP, not the legacy Groq harness"
             exit 1
           fi
-          if grep -q "/workspace/nazare-hydrogen" tools/wind-tunnel/server-v2.ts; then
-            echo "server-v2.ts must not use a persistent repository under /workspace"
+          if grep -q "/workspace/nazare-hydrogen" tools/wind-tunnel/server-v3.ts tools/wind-tunnel/runner.ts; then
+            echo "Wind Tunnel must not use a persistent repository under /workspace"
             exit 1
           fi
-          if grep -Eq "git tag .*baseline|rev-parse baseline" tools/wind-tunnel/server-v2.ts tools/wind-tunnel/bootstrap.ts; then
+          if grep -Eq "git tag .*baseline|rev-parse baseline" tools/wind-tunnel/server-v3.ts tools/wind-tunnel/runner.ts tools/wind-tunnel/bootstrap.ts; then
             echo "Wind Tunnel must not maintain a mutable local baseline tag"
+            exit 1
+          fi
+          if grep -q "run_experiment" tools/wind-tunnel/server-v3.ts; then
+            echo "server-v3.ts must expose start_experiment, not synchronous run_experiment"
             exit 1
           fi
 
@@ -94,7 +101,7 @@ jobs:
           const upstream = health.upstream ?? health;
           const expectedSha = process.env.GITHUB_SHA;
           if (!upstream.ok) throw new Error(`health not ok: ${JSON.stringify(health)}`);
-          if (upstream.controller !== 'server-v2') throw new Error(`wrong controller: ${upstream.controller}`);
+          if (upstream.controller !== 'server-v3') throw new Error(`wrong controller: ${upstream.controller}`);
           if (upstream.sourceSha !== expectedSha) throw new Error(`source SHA mismatch: ${upstream.sourceSha} != ${expectedSha}`);
           if (upstream.railwaySha !== expectedSha) throw new Error(`railway SHA mismatch: ${upstream.railwaySha} != ${expectedSha}`);
           if (upstream.provider !== 'vercel-ai-gateway') throw new Error(`wrong provider: ${upstream.provider}`);
