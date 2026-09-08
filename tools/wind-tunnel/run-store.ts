@@ -89,12 +89,29 @@ export function computeElapsed(startedAt: string | null, finishedAt: string | nu
   return Math.max(0, end - start);
 }
 
+export function deriveRunStatus(record: RunRecord): RunStatus {
+  if (record.status === 'completed' || record.status === 'failed') return record.status;
+  const states = Object.values(record.arms).map(arm => arm.status);
+  if (!states.length) return record.status;
+  if (states.every(status => status === 'queued')) return record.status === 'preparing' ? 'preparing' : 'queued';
+  if (states.some(status => status === 'running')) return 'running';
+  if (states.some(status => status === 'verifying') && states.every(status => ['verifying', 'completed', 'failed'].includes(status))) return 'verifying';
+  if (states.some(status => ['verifying', 'completed', 'failed'].includes(status))) return 'running';
+  if (states.some(status => status === 'preparing')) return 'preparing';
+  return record.status;
+}
+
 export function refreshElapsed(record: RunRecord): RunRecord {
   const arms: Record<string, ArmState> = {};
   for (const [name, arm] of Object.entries(record.arms)) {
     arms[name] = {...arm, elapsedMs: computeElapsed(arm.startedAt, arm.finishedAt)};
   }
-  return {...record, elapsedMs: computeElapsed(record.startedAt ?? record.createdAt, record.finishedAt), arms};
+  return {
+    ...record,
+    status: deriveRunStatus({...record, arms}),
+    elapsedMs: computeElapsed(record.startedAt ?? record.createdAt, record.finishedAt),
+    arms,
+  };
 }
 
 export async function createRunRecord(
