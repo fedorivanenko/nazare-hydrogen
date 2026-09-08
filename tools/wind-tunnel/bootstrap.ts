@@ -1,40 +1,26 @@
-import {mkdir, readFile, rm, writeFile} from 'node:fs/promises';
-import path from 'node:path';
+import {mkdir} from 'node:fs/promises';
 
+const APP_DIR = process.env.WIND_TUNNEL_APP_DIR ?? '/app';
 const ROOT_DIR = process.env.WIND_TUNNEL_ROOT ?? '/workspace';
-const REPO_DIR = process.env.WIND_TUNNEL_REPO_DIR ?? path.join(ROOT_DIR, 'nazare-hydrogen');
-const BASELINE_MARKER_PATH = path.join(ROOT_DIR, '.wind-tunnel-baseline-sha');
-const DEPLOYED_SOURCE_SHA = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.WIND_TUNNEL_SOURCE_SHA;
+const RESULTS_DIR = process.env.WIND_TUNNEL_RESULTS_DIR ?? `${ROOT_DIR}/results`;
+const SOURCE_SHA = process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.WIND_TUNNEL_SOURCE_SHA ?? 'local';
 
-async function readMarker() {
-  try {
-    return (await readFile(BASELINE_MARKER_PATH, 'utf8')).trim() || null;
-  } catch {
-    return null;
-  }
+if (!process.env.WIND_TUNNEL_TOKEN) {
+  throw new Error('WIND_TUNNEL_TOKEN is required');
+}
+if (process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_GIT_COMMIT_SHA) {
+  throw new Error('RAILWAY_GIT_COMMIT_SHA is required in Railway; refusing an unverifiable deployment');
 }
 
-async function refreshPersistentBaselineIfNeeded() {
-  await mkdir(ROOT_DIR, {recursive: true});
-  if (!DEPLOYED_SOURCE_SHA) {
-    console.log('Wind tunnel bootstrap: no deployed source SHA; keeping persistent workspace as-is');
-    return;
-  }
+await mkdir(RESULTS_DIR, {recursive: true});
 
-  const baselineSourceSha = await readMarker();
-  if (baselineSourceSha === DEPLOYED_SOURCE_SHA) {
-    console.log(`Wind tunnel bootstrap: baseline already matches ${DEPLOYED_SOURCE_SHA}`);
-    return;
-  }
+process.env.WIND_TUNNEL_APP_DIR = APP_DIR;
+process.env.WIND_TUNNEL_RESULTS_DIR = RESULTS_DIR;
+process.env.WIND_TUNNEL_SOURCE_SHA = SOURCE_SHA;
 
-  console.log(`Wind tunnel bootstrap: refreshing baseline ${baselineSourceSha ?? '<none>'} -> ${DEPLOYED_SOURCE_SHA}`);
-  await rm(REPO_DIR, {recursive: true, force: true});
-  await writeFile(BASELINE_MARKER_PATH, `${DEPLOYED_SOURCE_SHA}\n`, 'utf8');
-}
-
-await refreshPersistentBaselineIfNeeded();
-
-const toolCallNormalizer = `--import=${path.resolve('tools/wind-tunnel/normalize-tool-calls.mjs')}`;
-process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, toolCallNormalizer].filter(Boolean).join(' ');
+console.log(`Wind Tunnel source: ${SOURCE_SHA}`);
+console.log(`Immutable app snapshot: ${APP_DIR}`);
+console.log(`Durable results: ${RESULTS_DIR}`);
+console.log('Runtime source/worktrees are disposable and rebuilt on every container start');
 
 await import('./oauth-gateway.ts');
