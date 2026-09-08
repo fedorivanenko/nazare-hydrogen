@@ -2,22 +2,26 @@ import {createServer, type IncomingMessage, type ServerResponse} from 'node:http
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {existsSync} from 'node:fs';
-import {cp, mkdir, readFile, rm, stat, symlink, writeFile} from 'node:fs/promises';
+import {cp, mkdir, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {runPi} from './pi-adapter';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const APP_DIR = process.env.WIND_TUNNEL_APP_DIR ?? '/app';
-const ROOT_DIR = process.env.WIND_TUNNEL_ROOT ?? '/workspace';
-const REPO_DIR = process.env.WIND_TUNNEL_REPO_DIR ?? path.join(ROOT_DIR, 'nazare-hydrogen');
-const RESULTS_DIR = process.env.WIND_TUNNEL_RESULTS_DIR ?? path.join(ROOT_DIR, 'results');
-const RUNS_DIR = process.env.WIND_TUNNEL_RUNS_DIR ?? path.join(ROOT_DIR, 'runs');
+const SOURCE_SHA = process.env.WIND_TUNNEL_SOURCE_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? 'local';
+const RAILWAY_SHA = process.env.RAILWAY_GIT_COMMIT_SHA ?? null;
+const RESULTS_DIR = process.env.WIND_TUNNEL_RESULTS_DIR ?? '/workspace/results';
+const RUNTIME_DIR = process.env.WIND_TUNNEL_RUNTIME_DIR ?? '/tmp/nazare-wind-tunnel';
+const SOURCE_DIR = path.join(RUNTIME_DIR, 'source');
+const RUNS_DIR = path.join(RUNTIME_DIR, 'runs');
 const TOKEN = process.env.WIND_TUNNEL_TOKEN;
 const MAX_BODY_BYTES = 1_000_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_EXPERIMENT = 'experiments/luna-operability/experiment-02-marketing-consent.json';
 
 let activeExperiment: string | null = null;
+let sourceSnapshotCommit = '';
 
 type Arm = 'raw' | 'nazare';
 type JsonRpcRequest = {jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown>};
@@ -25,12 +29,10 @@ type ProcessResult = {command: string; cwd: string; exitCode: number | null; sig
 type Experiment = {
   id: string;
   taskFile: string;
-  baseline?: string;
   agent: {provider?: string; model?: string; thinking?: string; timeoutMs?: number};
   nazare: {capabilityId: string; requestedChange: string};
   verification: string[];
 };
-
 type VerificationResult = {command: string; exitCode: number | null; durationMs: number; passed: boolean; stdoutTail: string; stderrTail: string};
 
 function tail(text: string, max = 20_000) { return text.length <= max ? text : text.slice(-max); }
@@ -73,69 +75,91 @@ async function runProcess(file: string, args: string[], cwd: string, timeoutMs =
   });
 }
 
-async function runShell(command: string, cwd = REPO_DIR, timeoutMs?: number) {
+async function runShell(command: string, cwd = SOURCE_DIR, timeoutMs?: number) {
   return runProcess('/bin/sh', ['-lc', command], cwd, timeoutMs);
 }
 
-async function ensureWorkspace() {
-  await mkdir(ROOT_DIR, {recursive: true});
-  await mkdir(RESULTS_DIR, {recursive: true});
+async function createDisposableSourceSnapshot() {
+  await rm(RUNTIME_DIR, {recursive: true, force: true});
+  await mkdir(SOURCE_DIR, {recursive: true});
   await mkdir(RUNS_DIR, {recursive: true});
-  if (existsSync(path.join(REPO_DIR, '.git'))) return;
+  await mkdir(RESULTS_DIR, {recursive: true});
 
-  await rm(REPO_DIR, {recursive: true, force: true});
-  await mkdir(REPO_DIR, {recursive: true});
-  await cp(APP_DIR, REPO_DIR, {
+  await cp(APP_DIR, SOURCE_DIR, {
     recursive: true,
     filter(source) {
       const relative = path.relative(APP_DIR, source);
-      return relative !== 'benchmark-results' && !relative.startsWith(`benchmark-results${path.sep}`);
+      if (!relative) return true;
+      const first = relative.split(path.sep)[0];
+      return !['node_modules', 'dist', '.git', 'benchmark-results'].includes(first);
     },
   });
+
   const init = await runShell([
     'git init -q',
     'git config user.email wind-tunnel@nazare.local',
     'git config user.name "Nazare Wind Tunnel"',
     'git add -A',
-    'git commit -qm "wind-tunnel baseline"',
-    'git tag -f baseline',
+    `git commit -qm "deployed source ${SOURCE_SHA}"`,
   ].join(' && '));
-  if (init.exitCode !== 0) throw new Error(`Failed to initialize workspace: ${init.stderr || init.stdout}`);
-}
+  if (init.exitCode !== 0) throw new Error(`Failed to create disposable source snapshot: ${init.stderr || init.stdout}`);
 
-async function workspaceStatus() {
-  const [head, statusResult, baseline] = await Promise.all([
-    runShell('git rev-parse HEAD'),
-    runShell('git status --short --branch'),
-    runShell('git rev-parse baseline'),
-  ]);
-  return {repoDir: REPO_DIR, runsDir: RUNS_DIR, resultsDir: RESULTS_DIR, head: head.stdout.trim(), baseline: baseline.stdout.trim(), status: statusResult.stdout, activeExperiment};
+  const head = await runShell('git rev-parse HEAD');
+  if (head.exitCode !== 0) throw new Error(head.stderr || head.stdout);
+  sourceSnapshotCommit = head.stdout.trim();
 }
 
 async function loadExperiment(relativePath: string): Promise<Experiment> {
-  const resolved = path.resolve(REPO_DIR, relativePath);
-  if (!resolved.startsWith(`${path.resolve(REPO_DIR)}${path.sep}`)) throw new Error('Experiment path must stay inside repository');
+  const resolved = path.resolve(SOURCE_DIR, relativePath);
+  if (!resolved.startsWith(`${path.resolve(SOURCE_DIR)}${path.sep}`)) throw new Error('Experiment path must stay inside deployed source');
   const experiment = JSON.parse(await readFile(resolved, 'utf8')) as Experiment;
   if (!experiment.id || !experiment.taskFile || !Array.isArray(experiment.verification)) throw new Error('Invalid experiment definition');
   return experiment;
 }
 
-async function createIsolatedWorktree(runId: string, arm: Arm, baseline: string) {
+async function defaultAgentConfig() {
+  try {
+    const experiment = await loadExperiment(DEFAULT_EXPERIMENT);
+    return experiment.agent;
+  } catch {
+    return {};
+  }
+}
+
+async function workspaceStatus() {
+  const statusResult = await runShell('git status --short --branch');
+  const agent = await defaultAgentConfig();
+  return {
+    controller: 'server-v2',
+    version: '0.3.0',
+    sourceOfTruth: 'github-main-via-railway-image',
+    sourceSha: SOURCE_SHA,
+    railwaySha: RAILWAY_SHA,
+    sourceSnapshotCommit,
+    sourceDir: SOURCE_DIR,
+    runsDir: RUNS_DIR,
+    resultsDir: RESULTS_DIR,
+    sourceStatus: statusResult.stdout,
+    provider: agent.provider ?? null,
+    model: agent.model ?? null,
+    activeExperiment,
+  };
+}
+
+async function createIsolatedWorktree(runId: string, arm: Arm) {
   const worktree = path.join(RUNS_DIR, `${runId}-${arm}`);
   await rm(worktree, {recursive: true, force: true});
-  const add = await runShell(`git worktree add --detach ${JSON.stringify(worktree)} ${JSON.stringify(baseline)}`, REPO_DIR);
+  const add = await runShell(`git worktree add --detach ${JSON.stringify(worktree)} ${JSON.stringify(sourceSnapshotCommit)}`);
   if (add.exitCode !== 0) throw new Error(add.stderr || add.stdout);
 
-  const sharedNodeModules = path.join(REPO_DIR, 'node_modules');
+  const sharedNodeModules = path.join(APP_DIR, 'node_modules');
   const armNodeModules = path.join(worktree, 'node_modules');
-  if (existsSync(sharedNodeModules) && !existsSync(armNodeModules)) {
-    await symlink(sharedNodeModules, armNodeModules, 'dir');
-  }
+  if (existsSync(sharedNodeModules) && !existsSync(armNodeModules)) await symlink(sharedNodeModules, armNodeModules, 'dir');
   return worktree;
 }
 
 async function removeWorktree(worktree: string) {
-  await runShell(`git worktree remove --force ${JSON.stringify(worktree)}`, REPO_DIR, 60_000);
+  await runShell(`git worktree remove --force ${JSON.stringify(worktree)}`, SOURCE_DIR, 60_000);
   await rm(worktree, {recursive: true, force: true});
 }
 
@@ -149,14 +173,7 @@ function buildPrompt(task: string, arm: Arm) {
     task.trim(),
   ].join('\n');
   if (arm === 'raw') return common;
-  return [
-    common,
-    '',
-    'NAZARE COMPILED CONTEXT:',
-    'A task projection is available at .nazare/task.json.',
-    'Treat it as the authoritative starting boundary for source files, dependencies, policies, bindings, evidence, and invariants.',
-    'Stay inside that projected neighborhood unless source evidence or verification requires expansion.',
-  ].join('\n');
+  return [common, '', 'NAZARE COMPILED CONTEXT:', 'A task projection is available at .nazare/task.json.', 'Treat it as the authoritative starting boundary for source files, dependencies, policies, bindings, evidence, and invariants.', 'Stay inside that projected neighborhood unless source evidence or verification requires expansion.'].join('\n');
 }
 
 async function compileNazareTask(worktree: string, experiment: Experiment) {
@@ -164,10 +181,11 @@ async function compileNazareTask(worktree: string, experiment: Experiment) {
   const command = `npm run nazare:registry -- compile ${JSON.stringify(experiment.nazare.capabilityId)} ${JSON.stringify(experiment.nazare.requestedChange)}`;
   const result = await runShell(command, worktree, 60_000);
   if (result.exitCode !== 0) throw new Error(`Nazare compile failed: ${result.stderr || result.stdout}`);
-  const parsed = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')));
-  const target = path.join(worktree, '.nazare', 'task.json');
-  await writeFile(target, JSON.stringify(parsed, null, 2));
-  return {command, durationMs: result.durationMs, bytes: Buffer.byteLength(JSON.stringify(parsed)), projection: parsed};
+  const jsonStart = result.stdout.indexOf('{');
+  if (jsonStart < 0) throw new Error('Nazare compile did not return JSON');
+  const projection = JSON.parse(result.stdout.slice(jsonStart));
+  await writeFile(path.join(worktree, '.nazare', 'task.json'), JSON.stringify(projection, null, 2));
+  return {command, durationMs: result.durationMs, bytes: Buffer.byteLength(JSON.stringify(projection)), projection};
 }
 
 async function verify(worktree: string, commands: string[]): Promise<VerificationResult[]> {
@@ -179,29 +197,22 @@ async function verify(worktree: string, commands: string[]): Promise<Verificatio
   return results;
 }
 
-async function diffAgainst(worktree: string, baseline: string) {
-  const result = await runShell(`git diff --no-ext-diff --binary ${JSON.stringify(baseline)} -- . ':(exclude).nazare/task.json'`, worktree);
+async function diffAgainstDeployedSource(worktree: string) {
+  const result = await runShell(`git diff --no-ext-diff --binary ${JSON.stringify(sourceSnapshotCommit)} -- . ':(exclude).nazare/task.json'`, worktree);
   if (result.exitCode !== 0) throw new Error(result.stderr || result.stdout);
   return result.stdout;
 }
 
-async function runArm(runId: string, arm: Arm, experiment: Experiment, baseline: string, task: string) {
-  const worktree = await createIsolatedWorktree(runId, arm, baseline);
+async function runArm(runId: string, arm: Arm, experiment: Experiment, task: string) {
+  const worktree = await createIsolatedWorktree(runId, arm);
   const resultDir = path.join(RESULTS_DIR, runId, arm);
   await mkdir(resultDir, {recursive: true});
   const startedAt = new Date().toISOString();
   try {
     const compiled = arm === 'nazare' ? await compileNazareTask(worktree, experiment) : null;
     const prompt = buildPrompt(task, arm);
-    const agent = await runPi({
-      cwd: worktree,
-      prompt,
-      provider: experiment.agent.provider,
-      model: experiment.agent.model,
-      thinking: experiment.agent.thinking,
-      timeoutMs: Number(experiment.agent.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-    });
-    const patch = await diffAgainst(worktree, baseline);
+    const agent = await runPi({cwd: worktree, prompt, provider: experiment.agent.provider, model: experiment.agent.model, thinking: experiment.agent.thinking, timeoutMs: Number(experiment.agent.timeoutMs ?? DEFAULT_TIMEOUT_MS)});
+    const patch = await diffAgainstDeployedSource(worktree);
     const verification = await verify(worktree, experiment.verification);
     const passed = agent.exitCode === 0 && !agent.timedOut && verification.every(item => item.passed);
     const metadata = {
@@ -210,7 +221,8 @@ async function runArm(runId: string, arm: Arm, experiment: Experiment, baseline:
       arm,
       startedAt,
       finishedAt: new Date().toISOString(),
-      baseline,
+      sourceSha: SOURCE_SHA,
+      sourceSnapshotCommit,
       agent: {provider: experiment.agent.provider ?? null, model: experiment.agent.model ?? null, thinking: experiment.agent.thinking ?? null, exitCode: agent.exitCode, durationMs: agent.durationMs, timedOut: agent.timedOut},
       compiled: compiled ? {durationMs: compiled.durationMs, bytes: compiled.bytes} : null,
       patchBytes: Buffer.byteLength(patch),
@@ -233,25 +245,20 @@ async function runArm(runId: string, arm: Arm, experiment: Experiment, baseline:
 
 async function runExperiment(args: Record<string, unknown>) {
   if (activeExperiment) throw new Error(`Experiment already active: ${activeExperiment}`);
-  const experimentPath = String(args.experiment ?? 'experiments/luna-operability/experiment-02-marketing-consent.json');
+  const experimentPath = String(args.experiment ?? DEFAULT_EXPERIMENT);
   const requestedArms = Array.isArray(args.arms) ? args.arms.map(String) : ['raw', 'nazare'];
   const arms = requestedArms.filter((arm): arm is Arm => arm === 'raw' || arm === 'nazare');
   if (!arms.length) throw new Error('arms must contain raw and/or nazare');
 
   const experiment = await loadExperiment(experimentPath);
-  const taskPath = path.resolve(REPO_DIR, experiment.taskFile);
-  const task = await readFile(taskPath, 'utf8');
-  const baselineRef = experiment.baseline ?? 'baseline';
-  const baselineResult = await runShell(`git rev-parse ${JSON.stringify(baselineRef)}`);
-  if (baselineResult.exitCode !== 0) throw new Error(`Unknown baseline: ${baselineRef}`);
-  const baseline = baselineResult.stdout.trim();
+  const task = await readFile(path.resolve(SOURCE_DIR, experiment.taskFile), 'utf8');
   const runId = randomUUID();
   activeExperiment = runId;
   await mkdir(path.join(RESULTS_DIR, runId), {recursive: true});
   try {
     const armResults: Record<string, unknown> = {};
-    for (const arm of arms) armResults[arm] = await runArm(runId, arm, experiment, baseline, task);
-    const summary = {id: runId, experimentId: experiment.id, baseline, arms: armResults};
+    for (const arm of arms) armResults[arm] = await runArm(runId, arm, experiment, task);
+    const summary = {id: runId, experimentId: experiment.id, sourceSha: SOURCE_SHA, sourceSnapshotCommit, arms: armResults};
     await writeFile(path.join(RESULTS_DIR, runId, 'summary.json'), JSON.stringify(summary, null, 2));
     return summary;
   } finally {
@@ -268,21 +275,15 @@ async function compareRuns(ids: string[]) {
   const summaries = await Promise.all(ids.map(getRun));
   return summaries.map(summary => {
     const arms = summary.arms as Record<string, any>;
-    return {
-      id: summary.id,
-      experimentId: summary.experimentId,
-      raw: arms.raw ? {passed: arms.raw.passed, durationMs: arms.raw.agent.durationMs, patchBytes: arms.raw.patchBytes} : null,
-      nazare: arms.nazare ? {passed: arms.nazare.passed, compileMs: arms.nazare.compiled?.durationMs ?? null, durationMs: arms.nazare.agent.durationMs, patchBytes: arms.nazare.patchBytes} : null,
-    };
+    return {id: summary.id, experimentId: summary.experimentId, sourceSha: summary.sourceSha, raw: arms.raw ? {passed: arms.raw.passed, durationMs: arms.raw.agent.durationMs, patchBytes: arms.raw.patchBytes} : null, nazare: arms.nazare ? {passed: arms.nazare.passed, compileMs: arms.nazare.compiled?.durationMs ?? null, durationMs: arms.nazare.agent.durationMs, patchBytes: arms.nazare.patchBytes} : null};
   });
 }
 
 const tools = [
-  {name: 'workspace_status', description: 'Inspect the disposable Nazare wind-tunnel baseline and active experiment state.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
-  {name: 'run_experiment', description: 'Run a declarative controlled experiment through the same Pi harness. By default runs raw and Nazare-compiled arms from isolated worktrees.', inputSchema: {type: 'object', properties: {experiment: {type: 'string'}, arms: {type: 'array', items: {type: 'string', enum: ['raw', 'nazare']}}}, additionalProperties: false}},
+  {name: 'workspace_status', description: 'Inspect the immutable deployed-source identity and disposable Wind Tunnel runtime.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
+  {name: 'run_experiment', description: 'Run a controlled experiment through the same Pi harness. Raw and Nazare arms always start from the current deployed GitHub source snapshot.', inputSchema: {type: 'object', properties: {experiment: {type: 'string'}, arms: {type: 'array', items: {type: 'string', enum: ['raw', 'nazare']}}}, additionalProperties: false}},
   {name: 'get_run', description: 'Read the summary for a completed controlled experiment.', inputSchema: {type: 'object', required: ['id'], properties: {id: {type: 'string'}}, additionalProperties: false}},
   {name: 'compare_runs', description: 'Compare compact success and cost metrics for completed experiment runs.', inputSchema: {type: 'object', required: ['ids'], properties: {ids: {type: 'array', items: {type: 'string'}, minItems: 1}}, additionalProperties: false}},
-  {name: 'exec', description: 'Development-only shell access inside the immutable baseline workspace.', inputSchema: {type: 'object', required: ['command'], properties: {command: {type: 'string'}, timeoutMs: {type: 'number', minimum: 1000, maximum: MAX_TIMEOUT_MS}}, additionalProperties: false}},
 ] as const;
 
 async function callTool(name: string, args: Record<string, unknown>) {
@@ -291,11 +292,6 @@ async function callTool(name: string, args: Record<string, unknown>) {
     case 'run_experiment': return runExperiment(args);
     case 'get_run': return getRun(String(args.id ?? ''));
     case 'compare_runs': return compareRuns(Array.isArray(args.ids) ? args.ids.map(String) : []);
-    case 'exec': {
-      const command = String(args.command ?? '').trim();
-      if (!command) throw new Error('command is required');
-      return runShell(command, REPO_DIR, Number(args.timeoutMs ?? DEFAULT_TIMEOUT_MS));
-    }
     default: throw new Error(`Unknown tool: ${name}`);
   }
 }
@@ -310,9 +306,7 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse) {
   if (body.method === 'notifications/initialized') { res.statusCode = 202; res.end(); return; }
   try {
     switch (body.method) {
-      case 'initialize':
-        json(res, 200, rpcResult(body.id, {protocolVersion: String(body.params?.protocolVersion ?? '2025-06-18'), capabilities: {tools: {listChanged: false}}, serverInfo: {name: 'nazare-wind-tunnel', version: '0.2.0'}, instructions: 'Run controlled software-operability experiments. Pi owns the coding-agent loop; Nazare owns task compilation; the tunnel owns isolation, verification, and measurement.'}));
-        return;
+      case 'initialize': json(res, 200, rpcResult(body.id, {protocolVersion: String(body.params?.protocolVersion ?? '2025-06-18'), capabilities: {tools: {listChanged: false}}, serverInfo: {name: 'nazare-wind-tunnel', version: '0.3.0'}, instructions: 'GitHub/deployed source is immutable. Pi owns the coding-agent loop; Nazare owns task compilation; the tunnel owns disposable isolation, verification, and measurement.'})); return;
       case 'ping': json(res, 200, rpcResult(body.id, {})); return;
       case 'tools/list': json(res, 200, rpcResult(body.id, {tools})); return;
       case 'tools/call': {
@@ -327,16 +321,19 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
-await ensureWorkspace();
+await createDisposableSourceSnapshot();
 
 createServer(async (req, res) => {
   if (req.url === '/health') {
-    try { const repo = await stat(REPO_DIR); json(res, 200, {ok: repo.isDirectory(), version: '0.2.0', harness: 'pi', repoDir: REPO_DIR, tokenConfigured: Boolean(TOKEN)}); }
-    catch (error) { json(res, 500, {ok: false, error: String(error)}); }
+    const status = await workspaceStatus();
+    const sourceMatchesRailway = !RAILWAY_SHA || SOURCE_SHA === RAILWAY_SHA;
+    json(res, sourceMatchesRailway ? 200 : 503, {ok: sourceMatchesRailway, ...status});
     return;
   }
   if (req.url === '/mcp') { await handleRpc(req, res); return; }
   res.statusCode = 404; res.end();
 }).listen(PORT, '0.0.0.0', () => {
-  console.log(`Nazare Wind Tunnel v2 listening on ${PORT}`);
+  console.log(`Nazare Wind Tunnel v0.3 listening on ${PORT}`);
+  console.log(`Source SHA: ${SOURCE_SHA}`);
+  console.log(`Disposable source snapshot: ${sourceSnapshotCommit}`);
 });
