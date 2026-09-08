@@ -2,28 +2,51 @@
 
 The Wind Tunnel measures software operability, not agent cleverness.
 
-## Boundary
+## Source of truth
 
-- **Pi** owns the coding-agent loop, model/provider protocol, and filesystem/shell tools.
-- **Nazare** owns capability resolution and task compilation.
-- **Wind Tunnel** owns the immutable baseline, isolated A/B worktrees, external verification, traces, patches, and metrics.
+GitHub `main` is the only source of truth for Wind Tunnel code, experiment definitions, provider/model configuration, and deploy configuration. Railway is a disposable executor.
 
 ```text
-GitHub source of truth
-        |
-        v
-Railway Wind Tunnel controller
-        |
-        +-- raw worktree ---------> Pi ----+
-        |                                  |
-        +-- Nazare compile -> worktree -> Pi
-                                           |
-                                           v
-                              external verification
-                                           |
-                                           v
-                                     compare A/B
+GitHub main
+   |
+   | exact deployed SHA
+   v
+Railway image (/app, immutable)
+   |
+   +--> fresh disposable source snapshot (/tmp/nazare-wind-tunnel/source)
+   |       |
+   |       +--> raw worktree ---------> Pi
+   |       |
+   |       +--> Nazare compile -> worktree -> Pi
+   |                                      |
+   |                                      v
+   |                              external verification
+   |
+   +--> durable results (/workspace/results)
 ```
+
+The repository is never persisted under `/workspace`. Every container start deletes and recreates the runtime source/worktree tree under `/tmp` from the deployed `/app` snapshot. A deploy therefore replaces the Wind Tunnel instead of mutating an old one.
+
+## Runtime identity
+
+`bootstrap.ts` requires `RAILWAY_GIT_COMMIT_SHA` in Railway and passes it to the controller as `WIND_TUNNEL_SOURCE_SHA`. `/health` and `workspace_status` expose:
+
+- controller/version
+- Railway Git SHA
+- source SHA
+- disposable source-snapshot commit
+- provider/model
+- results/runtime paths
+
+The controller returns unhealthy if the source SHA and Railway SHA disagree.
+
+## Boundary
+
+- **Pi** owns the coding-agent loop, model/provider protocol, filesystem and shell tools.
+- **Nazare** owns capability resolution and task compilation.
+- **Wind Tunnel** owns source identity, disposable A/B worktrees, external verification, traces, patches, and metrics.
+
+The old custom Groq/tool-call harness has been retired. `groq-server.ts` is now only a compatibility entrypoint that loads `server-v2.ts` for the existing OAuth gateway.
 
 ## MCP surface
 
@@ -31,22 +54,17 @@ Railway Wind Tunnel controller
 - `run_experiment`
 - `get_run`
 - `compare_runs`
-- `exec` (development only)
 
-`run_experiment` defaults to `experiments/luna-operability/experiment-02-marketing-consent.json` and runs both `raw` and `nazare` arms.
+There is intentionally no shell/`exec` tool on the source snapshot: benchmark source is immutable from the controller surface.
 
-Each arm starts from the same local `baseline` tag in an isolated Git worktree. The Nazare arm compiles `.nazare/task.json` before Pi starts. After Pi exits, the Wind Tunnel itself runs the verification commands from the experiment definition; an agent saying that a task is complete is never counted as success.
+`run_experiment` defaults to `experiments/luna-operability/experiment-02-marketing-consent.json` and runs both `raw` and `nazare` arms. Both arms are detached Git worktrees from the same disposable source snapshot. The Nazare arm compiles `.nazare/task.json` before Pi starts. After Pi exits, Wind Tunnel itself runs the verification gate; agent self-reporting never counts as success.
 
 ## Pi + Vercel AI Gateway
 
-The adapter invokes the maintained Pi package in non-interactive JSON mode. The package is pinned in `pi-adapter.ts` and can be overridden with `WIND_TUNNEL_PI_PACKAGE`.
+The adapter invokes Pi in non-interactive JSON mode. The package is pinned in `pi-adapter.ts` and can be overridden with `WIND_TUNNEL_PI_PACKAGE`.
 
-The default experiment routes Pi through Vercel AI Gateway with provider `vercel-ai-gateway` and model `openai/gpt-oss-20b`. Configure Railway with `AI_GATEWAY_API_KEY`; provider credentials are never stored in Git.
+The default experiment uses provider `vercel-ai-gateway` and model `openai/gpt-oss-20b`. Railway only needs `AI_GATEWAY_API_KEY` plus runtime/auth variables; provider/model selection lives in Git.
 
-A different Pi provider/model may still be specified in an experiment definition when intentionally testing provider robustness, but Vercel AI Gateway is the default benchmark path.
+## Persistent state
 
-## Results
-
-A completed experiment is persisted under `WIND_TUNNEL_RESULTS_DIR/<run-id>/` with per-arm metadata, agent JSONL, stderr, prompt, compiled task (Nazare arm), patch, and external verification results.
-
-The Railway filesystem is runtime state only. GitHub remains the reproducible definition of the tunnel and experiments; durable result storage can be moved to object storage/Postgres later without changing the experiment protocol.
+Durable benchmark outputs live under `WIND_TUNNEL_RESULTS_DIR` (default `/workspace/results`). OAuth registration/token state may also live on the Railway volume so the ChatGPT connector survives redeploys, but no repository source, baseline, worktree, provider config, or build state is persisted there.
