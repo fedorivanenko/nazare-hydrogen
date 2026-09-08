@@ -35,9 +35,6 @@ jobs:
       - name: Test Wind Tunnel
         run: npm run test:wind-tunnel
 
-      - name: Typecheck
-        run: npm run typecheck
-
       - name: Build
         run: npm run build
 
@@ -107,3 +104,6 @@ jobs:
           if (upstream.provider !== 'vercel-ai-gateway') throw new Error(`wrong provider: ${upstream.provider}`);
           if (upstream.model !== 'openai/gpt-oss-20b') throw new Error(`wrong model: ${upstream.model}`);
           NODE
+
+      - name: Typecheck
+        run: npm run typecheck
