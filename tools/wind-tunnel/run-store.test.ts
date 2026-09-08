@@ -15,6 +15,8 @@ import {
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 const SNAPSHOT = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
+type ArtifactView = {available: boolean; bytes: number; truncated: boolean; content: string | null};
+
 async function fixture(arms: Arm[] = ['raw', 'nazare']) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'nazare-wind-tunnel-test-'));
   const runId = '11111111-1111-4111-8111-111111111111';
@@ -42,10 +44,26 @@ test('incomplete runs are readable before summary.json exists', async () => {
       startedAt: new Date(Date.now() - 25).toISOString(),
       sourceSnapshotCommit: SNAPSHOT,
     });
+    await patchArmState(root, runId, 'raw', {status: 'running', startedAt: new Date().toISOString(), sourceSnapshotCommit: SNAPSHOT});
     const running = await safeGetRun(root, runId);
     assert.equal(running.status, 'running');
     assert.equal(running.summary, null);
     assert.ok(running.elapsedMs >= 0);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+test('run lifecycle does not visibly regress while arms advance sequentially', async () => {
+  const {root, runId} = await fixture();
+  try {
+    await patchRunRecord(root, runId, {status: 'running', startedAt: new Date().toISOString(), sourceSnapshotCommit: SNAPSHOT});
+    await patchArmState(root, runId, 'raw', {status: 'verifying', startedAt: new Date().toISOString(), sourceSnapshotCommit: SNAPSHOT});
+    assert.equal((await safeGetRun(root, runId)).status, 'running');
+
+    await patchArmState(root, runId, 'raw', {status: 'completed', finishedAt: new Date().toISOString(), passed: true});
+    await patchArmState(root, runId, 'nazare', {status: 'verifying', startedAt: new Date().toISOString(), sourceSnapshotCommit: SNAPSHOT});
+    assert.equal((await safeGetRun(root, runId)).status, 'verifying');
   } finally {
     await rm(root, {recursive: true, force: true});
   }
@@ -89,9 +107,9 @@ test('artifact retrieval exposes present artifacts and marks missing ones unavai
     await writeFile(path.join(armDir, 'verification.json'), '[{"passed":true}]');
 
     const result = await getRunArtifacts(root, runId, 'nazare');
-    const artifacts = result.arms.nazare as Record<string, any>;
+    const artifacts = result.arms.nazare as Record<string, ArtifactView>;
     assert.equal(artifacts['patch.diff'].available, true);
-    assert.match(artifacts['patch.diff'].content, /diff --git/);
+    assert.match(artifacts['patch.diff'].content ?? '', /diff --git/);
     assert.equal(artifacts['compiled-task.json'].available, true);
     assert.equal(artifacts['verification.json'].available, true);
     assert.equal(artifacts['metadata.json'].available, false);
