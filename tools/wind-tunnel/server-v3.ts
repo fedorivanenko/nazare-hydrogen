@@ -1,7 +1,7 @@
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
+import {cp, mkdir, readdir, rm} from 'node:fs/promises';
 import {createServer, type IncomingMessage, type ServerResponse} from 'node:http';
-import {cp, mkdir, readFile, readdir, rm} from 'node:fs/promises';
 import path from 'node:path';
 import {
   createRunRecord,
@@ -9,6 +9,7 @@ import {
   getRunArtifacts,
   getRunRecord,
   listExperiments,
+  patchRunRecord,
   safeGetRun,
   type Arm,
 } from './run-store';
@@ -28,6 +29,13 @@ let sourceSnapshotCommit = '';
 
 type JsonRpcRequest = {jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown>};
 type ProcessResult = {exitCode: number | null; stdout: string; stderr: string};
+type CompactArmResult = {
+  arm?: string;
+  passed?: boolean;
+  patchBytes?: number;
+  agent?: {durationMs?: number};
+  compiled?: {durationMs?: number} | null;
+};
 
 function json(res: ServerResponse, status: number, value: unknown) {
   res.statusCode = status;
@@ -93,17 +101,36 @@ async function createControllerSnapshot() {
   sourceSnapshotCommit = head.stdout.trim();
 }
 
-async function activeRuns() {
-  const active = [];
+async function runIds() {
   let entries: string[] = [];
-  try { entries = await readdir(RESULTS_DIR); } catch { return active; }
-  for (const entry of entries) {
-    if (!/^[0-9a-f-]{36}$/i.test(entry)) continue;
+  try { entries = await readdir(RESULTS_DIR); } catch { return []; }
+  return entries.filter(entry => /^[0-9a-f-]{36}$/i.test(entry));
+}
+
+async function recoverInterruptedRuns() {
+  for (const id of await runIds()) {
+    try {
+      const run = await getRunRecord(RESULTS_DIR, id);
+      if (run.status === 'completed' || run.status === 'failed') continue;
+      await patchRunRecord(RESULTS_DIR, id, {
+        status: 'failed',
+        finishedAt: new Date().toISOString(),
+        error: 'Wind Tunnel controller restarted before the detached runner completed',
+      });
+    } catch {
+      // Ignore unrelated or partially removed result directories.
+    }
+  }
+}
+
+async function activeRuns() {
+  const active: Array<{runId: string; status: string; elapsedMs: number}> = [];
+  for (const entry of await runIds()) {
     try {
       const run = await getRunRecord(RESULTS_DIR, entry);
       if (!['completed', 'failed'].includes(run.status)) active.push({runId: run.id, status: run.status, elapsedMs: run.elapsedMs});
     } catch {
-      // Ignore unrelated or partially removed directories.
+      // Ignore unrelated or partially removed result directories.
     }
   }
   return active;
@@ -152,13 +179,23 @@ async function startExperiment(args: Record<string, unknown>) {
     agent: experiment.definition.agent,
   });
 
-  const child = spawn('npx', ['tsx', 'tools/wind-tunnel/runner.ts', '--run', runId], {
-    cwd: process.cwd(),
-    env: process.env,
-    detached: true,
-    stdio: 'ignore',
-  });
-  child.unref();
+  try {
+    const child = spawn('npx', ['tsx', 'tools/wind-tunnel/runner.ts', '--run', runId], {
+      cwd: process.cwd(),
+      env: process.env,
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+  } catch (error) {
+    await patchRunRecord(RESULTS_DIR, runId, {
+      status: 'failed',
+      finishedAt: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+
   return {runId, status: record.status};
 }
 
@@ -176,18 +213,30 @@ async function getRunStatus(runId: string) {
   };
 }
 
+function asCompactArmResult(value: unknown): CompactArmResult | null {
+  if (!value || typeof value !== 'object') return null;
+  return value as CompactArmResult;
+}
+
 async function compareRuns(ids: string[]) {
   if (!ids.length) throw new Error('ids must contain at least one run id');
   const runs = await Promise.all(ids.map(id => safeGetRun(RESULTS_DIR, id)));
   return runs.map(run => {
-    const arms = run.armResults as Record<string, any>;
-    const compact = (arm: any) => arm ? {
-      status: run.arms?.[arm.arm]?.status ?? null,
-      passed: arm.passed ?? null,
-      durationMs: arm.agent?.durationMs ?? null,
-      compileMs: arm.compiled?.durationMs ?? null,
-      patchBytes: arm.patchBytes ?? null,
-    } : null;
+    const armResults = run.armResults && typeof run.armResults === 'object'
+      ? run.armResults as Record<string, unknown>
+      : {};
+    const compact = (armName: Arm) => {
+      const result = asCompactArmResult(armResults[armName]);
+      const state = run.arms[armName];
+      if (!result && !state) return null;
+      return {
+        status: state?.status ?? null,
+        passed: result?.passed ?? state?.passed ?? null,
+        durationMs: result?.agent?.durationMs ?? null,
+        compileMs: result?.compiled?.durationMs ?? null,
+        patchBytes: result?.patchBytes ?? null,
+      };
+    };
     return {
       id: run.id,
       experimentId: run.experimentId,
@@ -195,8 +244,8 @@ async function compareRuns(ids: string[]) {
       elapsedMs: run.elapsedMs,
       sourceSha: run.sourceSha,
       sourceSnapshotCommit: run.sourceSnapshotCommit,
-      raw: compact(arms.raw),
-      nazare: compact(arms.nazare),
+      raw: compact('raw'),
+      nazare: compact('nazare'),
     };
   });
 }
@@ -270,6 +319,7 @@ async function handleRpc(req: IncomingMessage, res: ServerResponse) {
 }
 
 await createControllerSnapshot();
+await recoverInterruptedRuns();
 
 createServer(async (req, res) => {
   if (req.url === '/health') {
