@@ -3,7 +3,7 @@
   "taskFile": "experiments/luna-operability/task-02-marketing-consent.md",
   "baseline": "baseline",
   "agent": {
-    "provider": "groq",
+    "provider": "vercel-ai-gateway",
     "model": "openai/gpt-oss-20b",
     "thinking": "low",
     "timeoutMs": 900000
