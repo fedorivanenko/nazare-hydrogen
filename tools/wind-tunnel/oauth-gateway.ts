@@ -8,7 +8,7 @@ const PORT = Number(process.env.PORT ?? 3000);
 const INTERNAL_PORT = Number(process.env.WIND_TUNNEL_INTERNAL_PORT ?? 3001);
 const ROOT_DIR = process.env.WIND_TUNNEL_ROOT ?? '/workspace';
 const OAUTH_STATE_FILE = path.join(ROOT_DIR, 'oauth-state.json');
-const ADMIN_SECRET = process.env.WIND_TUNNEL_TOKEN;
+const ADMIN_SECRET = process.env.WIND_TUNNEL_TOKEN ?? '';
 const PUBLIC_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN;
 const BASE_URL = process.env.WIND_TUNNEL_PUBLIC_URL ?? (PUBLIC_DOMAIN ? `https://${PUBLIC_DOMAIN}` : `http://localhost:${PORT}`);
 const MCP_URL = `${BASE_URL}/mcp`;
@@ -203,9 +203,15 @@ function validateAuthorize(params: URLSearchParams) {
 
 async function handleRegister(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== 'POST') return json(res, 405, {error: 'method_not_allowed'});
-  let body: any;
-  try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, {error: 'invalid_client_metadata'}); }
-  const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u: unknown) => typeof u === 'string') : [];
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(await readBody(req));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid_client_metadata');
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return json(res, 400, {error: 'invalid_client_metadata'});
+  }
+  const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === 'string') : [];
   if (!redirectUris.length) return json(res, 400, {error: 'invalid_redirect_uri'});
   for (const uri of redirectUris) {
     try { new URL(uri); } catch { return json(res, 400, {error: 'invalid_redirect_uri'}); }
@@ -237,7 +243,7 @@ async function handleAuthorize(req: IncomingMessage, res: ServerResponse, url: U
   params.delete('admin_secret');
   const check = validateAuthorize(params);
   if ('error' in check) return html(res, 400, authorizePage(params, check.error));
-  if (!secureEqual(adminSecret, ADMIN_SECRET!)) return html(res, 401, authorizePage(params, 'Invalid secret'));
+  if (!secureEqual(adminSecret, ADMIN_SECRET)) return html(res, 401, authorizePage(params, 'Invalid secret'));
 
   const code = opaqueToken();
   state.codes.push({
@@ -379,13 +385,13 @@ async function proxyHealth(res: ServerResponse) {
 
 await loadState();
 
-const child = spawn('npx', ['tsx', 'tools/wind-tunnel/groq-server.ts'], {
+const child = spawn('npx', ['tsx', 'tools/wind-tunnel/server-v2.ts'], {
   cwd: process.cwd(),
   env: {...process.env, PORT: String(INTERNAL_PORT)},
   stdio: 'inherit',
 });
 child.on('exit', (code, signal) => {
-  console.error(`Internal Groq MCP exited code=${code} signal=${signal}`);
+  console.error(`Internal Wind Tunnel MCP exited code=${code} signal=${signal}`);
   process.exit(code ?? 1);
 });
 
