@@ -33,4 +33,8 @@ async function refreshPersistentBaselineIfNeeded() {
 }
 
 await refreshPersistentBaselineIfNeeded();
+
+const toolCallNormalizer = `--import=${path.resolve('tools/wind-tunnel/normalize-tool-calls.mjs')}`;
+process.env.NODE_OPTIONS = [process.env.NODE_OPTIONS, toolCallNormalizer].filter(Boolean).join(' ');
+
 await import('./oauth-gateway.ts');
