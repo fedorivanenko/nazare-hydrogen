@@ -41,6 +41,11 @@ export type Experiment = {
   verification: string[];
 };
 
+type RunSummary = {
+  arms?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 const ARTIFACT_NAMES = [
   'patch.diff',
   'changed-files.json',
@@ -55,6 +60,10 @@ const ARTIFACT_NAMES = [
 ] as const;
 
 const MAX_ARTIFACT_BYTES = 400_000;
+
+function hasErrorCode(error: unknown, code: string) {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as {code?: unknown}).code === code;
+}
 
 export function validateRunId(id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Invalid run id');
@@ -76,8 +85,8 @@ export async function atomicWriteJson(file: string, value: unknown) {
 export async function readJsonIfExists<T>(file: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(file, 'utf8')) as T;
-  } catch (error: any) {
-    if (error?.code === 'ENOENT') return null;
+  } catch (error: unknown) {
+    if (hasErrorCode(error, 'ENOENT')) return null;
     throw error;
   }
 }
@@ -173,10 +182,10 @@ export async function patchArmState(resultsDir: string, id: string, arm: Arm, pa
 
 export async function safeGetRun(resultsDir: string, id: string) {
   const state = await getRunRecord(resultsDir, id);
-  const summary = await readJsonIfExists<any>(path.join(runDir(resultsDir, id), 'summary.json'));
+  const summary = await readJsonIfExists<RunSummary>(path.join(runDir(resultsDir, id), 'summary.json'));
   const armMetadata: Record<string, unknown> = {};
   for (const arm of Object.keys(state.arms)) {
-    const metadata = await readJsonIfExists(path.join(runDir(resultsDir, id), arm, 'metadata.json'));
+    const metadata = await readJsonIfExists<unknown>(path.join(runDir(resultsDir, id), arm, 'metadata.json'));
     if (metadata) armMetadata[arm] = metadata;
   }
   return {
@@ -194,8 +203,8 @@ async function readArtifact(file: string) {
     const bytes = info.size;
     if (bytes <= MAX_ARTIFACT_BYTES) return {available: true, bytes, truncated: false, content};
     return {available: true, bytes, truncated: true, content: content.slice(-MAX_ARTIFACT_BYTES)};
-  } catch (error: any) {
-    if (error?.code === 'ENOENT') return {available: false, bytes: 0, truncated: false, content: null};
+  } catch (error: unknown) {
+    if (hasErrorCode(error, 'ENOENT')) return {available: false, bytes: 0, truncated: false, content: null};
     throw error;
   }
 }
