@@ -15,16 +15,20 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_BASE_URL = process.env.GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1';
-type LlmProvider = 'groq' | 'openrouter';
+const AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY;
+const VERCEL_AI_GATEWAY_BASE_URL = process.env.VERCEL_AI_GATEWAY_BASE_URL ?? 'https://ai-gateway.vercel.sh/v1';
+type LlmProvider = 'groq' | 'openrouter' | 'vercel';
 const requestedProvider = process.env.LLM_PROVIDER;
-if (requestedProvider && requestedProvider !== 'groq' && requestedProvider !== 'openrouter') {
+if (requestedProvider && requestedProvider !== 'groq' && requestedProvider !== 'openrouter' && requestedProvider !== 'vercel') {
   throw new Error("Unsupported LLM_PROVIDER: " + requestedProvider);
 }
 const PROVIDER: LlmProvider = (requestedProvider as LlmProvider | undefined)
-  ?? (OPENROUTER_API_KEY ? 'openrouter' : 'groq');
-const DEFAULT_MODEL = PROVIDER === 'openrouter'
-  ? (process.env.OPENROUTER_MODEL ?? 'nvidia/nemotron-3-ultra-550b-a55b:free')
-  : (process.env.GROQ_MODEL ?? 'openai/gpt-oss-20b');
+  ?? (AI_GATEWAY_API_KEY ? 'vercel' : OPENROUTER_API_KEY ? 'openrouter' : 'groq');
+const DEFAULT_MODEL = PROVIDER === 'vercel'
+  ? (process.env.VERCEL_MODEL ?? 'openai/gpt-oss-20b')
+  : PROVIDER === 'openrouter'
+    ? (process.env.OPENROUTER_MODEL ?? 'nvidia/nemotron-3-ultra-550b-a55b:free')
+    : (process.env.GROQ_MODEL ?? 'openai/gpt-oss-20b');
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_OUTPUT_BYTES = 2_000_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -144,7 +148,9 @@ async function runProcess(
 }
 
 async function runShell(command: string, cwd = REPO_DIR, timeoutMs?: number) {
-  return runProcess('/bin/sh', ['-lc', command], cwd, timeoutMs);
+  // Normalize the agent shell through mise so Node tooling is always on PATH.
+  // This keeps environment discovery out of benchmark measurements.
+  return runProcess('/usr/local/bin/mise', ['exec', '--', '/bin/sh', '-lc', command], cwd, timeoutMs);
 }
 
 function safeRepoPath(relativePath: string) {
@@ -196,6 +202,7 @@ async function workspaceStatus() {
     activeAgentRun,
     provider: PROVIDER,
     providerConfigured: Boolean(providerApiKey()),
+    vercelConfigured: Boolean(AI_GATEWAY_API_KEY),
     openrouterConfigured: Boolean(OPENROUTER_API_KEY),
     groqConfigured: Boolean(GROQ_API_KEY),
     defaultModel: DEFAULT_MODEL,
@@ -316,11 +323,18 @@ async function executeAgentTool(call: AgentToolCall) {
 }
 
 function providerApiKey(provider: LlmProvider = PROVIDER) {
+  if (provider === 'vercel') return AI_GATEWAY_API_KEY;
   return provider === 'openrouter' ? OPENROUTER_API_KEY : GROQ_API_KEY;
 }
 
 function providerBaseUrl(provider: LlmProvider = PROVIDER) {
+  if (provider === 'vercel') return VERCEL_AI_GATEWAY_BASE_URL;
   return provider === 'openrouter' ? OPENROUTER_BASE_URL : GROQ_BASE_URL;
+}
+
+function providerKeyName(provider: LlmProvider = PROVIDER) {
+  if (provider === 'vercel') return 'AI_GATEWAY_API_KEY';
+  return provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY';
 }
 
 const OPENROUTER_FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL ?? 'openrouter/free';
@@ -331,7 +345,13 @@ type CompletionRoute = {provider: LlmProvider; model: string};
 
 function completionRoutes(model: string, allowFallback: boolean): CompletionRoute[] {
   const routes: CompletionRoute[] = [{provider: PROVIDER, model}];
-  if (!allowFallback || PROVIDER !== 'openrouter') return routes;
+  if (!allowFallback) return routes;
+  if (PROVIDER === 'vercel') {
+    if (OPENROUTER_API_KEY) routes.push({provider: 'openrouter', model});
+    if (GROQ_API_KEY && model === GROQ_FALLBACK_MODEL) routes.push({provider: 'groq', model});
+    return routes;
+  }
+  if (PROVIDER !== 'openrouter') return routes;
   if (OPENROUTER_API_KEY && model !== OPENROUTER_FALLBACK_MODEL) {
     routes.push({provider: 'openrouter', model: OPENROUTER_FALLBACK_MODEL});
   }
@@ -342,7 +362,7 @@ function completionRoutes(model: string, allowFallback: boolean): CompletionRout
 async function llmCompletion(provider: LlmProvider, model: string, messages: AgentMessage[], reasoningEffort: string, maxTokens: number) {
   const apiKey = providerApiKey(provider);
   if (!apiKey) {
-    throw new Error((provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY') + ' is not configured');
+    throw new Error(providerKeyName(provider) + ' is not configured');
   }
 
   for (let attempt = 0; attempt <= MAX_PROVIDER_RETRIES; attempt++) {
@@ -403,7 +423,7 @@ async function completionWithFallback(model: string, messages: AgentMessage[], r
 }
 async function runAgent(args: Record<string, unknown>) {
   if (activeAgentRun) throw new Error(`Agent run already active: ${activeAgentRun}`);
-  if (!providerApiKey()) throw new Error((PROVIDER === 'openrouter' ? 'OPENROUTER_API_KEY' : 'GROQ_API_KEY') + ' is not configured');
+  if (!providerApiKey()) throw new Error(providerKeyName() + ' is not configured');
 
   const instruction = String(args.instruction ?? '').trim();
   if (!instruction) throw new Error('instruction is required');
