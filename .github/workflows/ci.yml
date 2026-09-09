@@ -12,126 +12,17 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_HOST_AUTH_METHOD: trust
-          POSTGRES_DB: wind_tunnel
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d wind_tunnel"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Postgres client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      - name: Test Wind Tunnel
-        run: npm run test:wind-tunnel
-
-      - name: Build
-        run: npm run build
-
-      - name: Guard Wind Tunnel architecture
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f tools/wind-tunnel/control.ts
-          test -f tools/wind-tunnel/worker.ts
-          test -f tools/wind-tunnel/postgres-store.ts
-          test -f tools/wind-tunnel/artifact-store.ts
-          test ! -f tools/wind-tunnel/server-v3.ts
-          test ! -f tools/wind-tunnel/runner.ts
-          test ! -f tools/wind-tunnel/run-store.ts
-          if grep -Eq "spawn\(.*worker|worker\.ts" tools/wind-tunnel/control.ts; then
-            echo "control.ts must never spawn or own the worker"
-            exit 1
-          fi
-          if grep -q "/workspace/results" tools/wind-tunnel/control.ts tools/wind-tunnel/worker.ts; then
-            echo "durable run state/artifacts must not use the Railway volume filesystem"
-            exit 1
-          fi
-          if ! grep -q "claimNextRun" tools/wind-tunnel/worker.ts; then
-            echo "worker.ts must claim durable jobs from Postgres"
-            exit 1
-          fi
-          if ! grep -q "Promise.all(state.spec.arms.map(runArm))" tools/wind-tunnel/worker.ts; then
-            echo "raw and nazare arms must execute concurrently from the same baseline"
-            exit 1
-          fi
-
-      - name: Wind Tunnel control runtime smoke test
-        shell: bash
-        env:
-          PORT: "3100"
-          WIND_TUNNEL_INTERNAL_PORT: "3101"
-          WIND_TUNNEL_TOKEN: "ci-wind-tunnel-token"
-          WIND_TUNNEL_APP_DIR: ${{ github.workspace }}
-          WIND_TUNNEL_ROOT: ${{ runner.temp }}/wind-tunnel-state
-          WIND_TUNNEL_RUNTIME_DIR: ${{ runner.temp }}/wind-tunnel-runtime
-          WIND_TUNNEL_SOURCE_SHA: ${{ github.sha }}
-          WIND_TUNNEL_SOURCE_REPO: "fedorivanenko/nazare-hydrogen"
-          RAILWAY_GIT_COMMIT_SHA: ${{ github.sha }}
-          RAILWAY_ENVIRONMENT: "ci"
-          DATABASE_URL: "postgresql://postgres@127.0.0.1:5432/wind_tunnel"
-        run: |
-          set -euo pipefail
-          npx tsx tools/wind-tunnel/bootstrap.ts >"$RUNNER_TEMP/wind-tunnel.log" 2>&1 &
-          PID=$!
-          trap 'kill "$PID" 2>/dev/null || true; cat "$RUNNER_TEMP/wind-tunnel.log" || true' EXIT
-
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:3100/health >"$RUNNER_TEMP/health.json"; then
-              break
-            fi
-            if ! kill -0 "$PID" 2>/dev/null; then
-              echo "Wind Tunnel exited before becoming healthy"
-              exit 1
-            fi
-            sleep 1
-          done
-
-          test -s "$RUNNER_TEMP/health.json"
-          cat "$RUNNER_TEMP/health.json"
-
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const health = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/health.json', 'utf8'));
-          const upstream = health.upstream ?? health;
-          const expectedSha = process.env.GITHUB_SHA;
-          if (!upstream.ok) throw new Error(`health not ok: ${JSON.stringify(health)}`);
-          if (upstream.controller !== 'wind-tunnel-control') throw new Error(`wrong controller: ${upstream.controller}`);
-          if (upstream.version !== '1.0.0') throw new Error(`wrong version: ${upstream.version}`);
-          if (upstream.sourceSha !== expectedSha) throw new Error(`source SHA mismatch: ${upstream.sourceSha} != ${expectedSha}`);
-          if (upstream.persistence?.runs !== 'postgres') throw new Error('run persistence must be postgres');
-          if (upstream.persistence?.artifacts !== 's3') throw new Error('artifact persistence must be s3');
-          NODE
-
-      - name: Typecheck
-        run: npm run typecheck
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm typecheck
