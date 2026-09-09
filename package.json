@@ -9,7 +9,6 @@
 		"build": "shopify hydrogen build",
 		"typecheck": "react-router typegen && tsc --noEmit",
 		"test": "tsx --test app/nazare/registry/index.test.ts",
-		"test:wind-tunnel": "tsx --test tools/wind-tunnel/domain.test.ts",
 		"lint:biome": "biome lint .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
 		"lint": "pnpm run lint:biome && pnpm run lint:nazare",
