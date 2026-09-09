@@ -57,7 +57,7 @@ jobs:
       - name: Start Wind Tunnel run
         id: start
         env:
-          WIND_TUNNEL_URL: ${{ secrets.WIND_TUNNEL_URL }}
+          WIND_TUNNEL_URL: ${{ vars.WIND_TUNNEL_URL }}
           WIND_TUNNEL_TOKEN: ${{ secrets.WIND_TUNNEL_TOKEN }}
           SUBJECT_REPO: ${{ steps.pr.outputs.repo }}
           SUBJECT_SHA: ${{ steps.pr.outputs.sha }}
@@ -87,7 +87,7 @@ jobs:
       - name: Wait for result
         id: result
         env:
-          WIND_TUNNEL_URL: ${{ secrets.WIND_TUNNEL_URL }}
+          WIND_TUNNEL_URL: ${{ vars.WIND_TUNNEL_URL }}
           WIND_TUNNEL_TOKEN: ${{ secrets.WIND_TUNNEL_TOKEN }}
           RUN_ID: ${{ steps.start.outputs.run_id }}
         run: |
