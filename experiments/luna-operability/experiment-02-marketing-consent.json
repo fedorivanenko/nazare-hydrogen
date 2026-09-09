@@ -8,8 +8,8 @@
     "timeoutMs": 30000
   },
   "tools": {
-    "allow": ["read", "bash", "edit", "write"],
-    "extensions": []
+    "allow": ["read", "bash", "edit", "write", "nazare_find", "nazare_inspect", "nazare_compile"],
+    "extensions": [".wind-tunnel/nazare-tools.ts"]
   },
   "verification": [
     "pnpm lint",

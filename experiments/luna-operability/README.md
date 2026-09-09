@@ -27,16 +27,16 @@ Experiment definition declares:
 
 Wind Tunnel records hashes and runtime versions in `environment.json` and `tool-manifest.json`. Ambient Pi extensions, skills, prompt templates, and context files are disabled.
 
-This experiment currently enables the fixed coding toolset:
+This experiment enables fixed coding tools plus pinned Nazare registry tools:
 
 ```json
 {
-  "allow": ["read", "bash", "edit", "write"],
-  "extensions": []
+  "allow": ["read", "bash", "edit", "write", "nazare_find", "nazare_inspect", "nazare_compile"],
+  "extensions": [".wind-tunnel/nazare-tools.ts"]
 }
 ```
 
-Custom project tools can be added as pinned Pi extensions and named in the allowlist.
+Nazare tools expose registry search, entity-neighborhood inspection, and capability-change compilation directly to model.
 
 ## Verification gate
 
