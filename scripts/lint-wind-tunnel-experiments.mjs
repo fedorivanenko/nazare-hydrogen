@@ -4,7 +4,6 @@ import path from 'node:path';
 const MAX_TIMEOUT_MS = 15 * 60_000;
 const root = process.cwd();
 const requestedPath = process.argv[2];
-const requestedArm = process.argv[3];
 
 function fail(file, message) {
   return `${file}: ${message}`;
@@ -14,7 +13,7 @@ function safeRelative(value) {
   return typeof value === 'string' && value.length > 0 && !path.isAbsolute(value) && !value.split(/[\\/]/).includes('..');
 }
 
-function validate(definition, file, arm) {
+function validate(definition, file) {
   const errors = [];
   if (!definition || typeof definition !== 'object' || Array.isArray(definition)) return [fail(file, 'must contain a JSON object')];
   if (typeof definition.id !== 'string' || !definition.id.trim()) errors.push(fail(file, 'id must be a non-empty string'));
@@ -28,6 +27,13 @@ function validate(definition, file, arm) {
     if (typeof agent.model !== 'string' || !agent.model.trim()) errors.push(fail(file, 'agent.model is required'));
     if (agent.thinking != null && (typeof agent.thinking !== 'string' || !agent.thinking.trim())) errors.push(fail(file, 'agent.thinking must be a non-empty string when provided'));
     if (!Number.isInteger(agent.timeoutMs) || agent.timeoutMs < 1_000 || agent.timeoutMs > MAX_TIMEOUT_MS) errors.push(fail(file, `agent.timeoutMs must be an integer from 1000 to ${MAX_TIMEOUT_MS}`));
+  }
+
+  const tools = definition.tools;
+  if (tools != null) {
+    if (!tools || typeof tools !== 'object' || Array.isArray(tools)) errors.push(fail(file, 'tools must be an object'));
+    if (tools?.allow != null && (!Array.isArray(tools.allow) || tools.allow.length === 0 || tools.allow.some((name) => typeof name !== 'string' || !name.trim()))) errors.push(fail(file, 'tools.allow must be a non-empty array of tool names'));
+    if (tools?.extensions != null && (!Array.isArray(tools.extensions) || tools.extensions.some((extension) => !safeRelative(extension)))) errors.push(fail(file, 'tools.extensions must contain safe repo-relative paths'));
   }
 
   if (!Array.isArray(definition.verification) || definition.verification.length === 0) {
@@ -44,14 +50,6 @@ function validate(definition, file, arm) {
     });
   }
 
-  if (arm === 'nazare' || definition.nazare != null) {
-    const nazare = definition.nazare;
-    if (!nazare || typeof nazare !== 'object') errors.push(fail(file, 'nazare configuration is required for the nazare arm'));
-    else {
-      if (typeof nazare.capabilityId !== 'string' || !nazare.capabilityId.trim()) errors.push(fail(file, 'nazare.capabilityId is required'));
-      if (typeof nazare.requestedChange !== 'string' || !nazare.requestedChange.trim()) errors.push(fail(file, 'nazare.requestedChange is required'));
-    }
-  }
   return errors;
 }
 
@@ -77,13 +75,14 @@ for (const absolute of files) {
     const info = await stat(absolute);
     if (!info.isFile()) throw new Error('not a file');
     const definition = JSON.parse(await readFile(absolute, 'utf8'));
-    errors.push(...validate(definition, relative, requestedArm));
-    if (safeRelative(definition.taskFile)) {
-      const task = path.resolve(root, definition.taskFile);
-      if (!task.startsWith(`${root}${path.sep}`)) errors.push(fail(relative, 'taskFile resolves outside repository'));
+    errors.push(...validate(definition, relative));
+    for (const referencedPath of [definition.taskFile, ...(definition.tools?.extensions ?? [])]) {
+      if (!safeRelative(referencedPath)) continue;
+      const target = path.resolve(root, referencedPath);
+      if (!target.startsWith(`${root}${path.sep}`)) errors.push(fail(relative, `${referencedPath} resolves outside repository`));
       else {
-        try { if (!(await stat(task)).isFile()) throw new Error('not a file'); }
-        catch { errors.push(fail(relative, `taskFile does not exist: ${definition.taskFile}`)); }
+        try { if (!(await stat(target)).isFile()) throw new Error('not a file'); }
+        catch { errors.push(fail(relative, `referenced file does not exist: ${referencedPath}`)); }
       }
     }
   } catch (error) {

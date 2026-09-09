@@ -1,14 +1,10 @@
 # Luna operability experiment
 
-Goal: test whether Nazare can compile a cross-cutting commercial change into a sufficiently small, explicit task that a deliberately weaker coding model needs materially less repository exploration and repair.
-
-## Hypothesis
-
-Given the same model and requested behavior, the Nazare-guided arm should discover the complete executable neighborhood before source exploration, preserve architectural invariants, and reach the hard verification gate with fewer irrelevant reads and repair loops.
+Goal: measure whether a model can complete a cross-cutting commercial change inside a pinned repository and explicitly declared tool environment.
 
 ## Task
 
-Run both arms from the same commit and use `task-02-marketing-consent.md` unchanged.
+Run `task-02-marketing-consent.md` against the exact requested commit.
 
 The task intentionally crosses:
 
@@ -18,59 +14,51 @@ The task intentionally crosses:
 - provider invocation boundary
 - runtime evidence contract
 
-## Arm A — raw repository
+## Pinned agent environment
 
-Give the model only the task text, normal shell/file/code-edit tools, and the repository. Do not mention the Nazare registry or registry CLI.
+Experiment definition declares:
 
-## Arm B — compiled Nazare context
+- provider and model
+- thinking level
+- agent timeout
+- enabled tool names
+- repo-relative Pi tool extensions
+- verification commands
 
-Give the same model the same task plus this instruction:
+Wind Tunnel records hashes and runtime versions in `environment.json` and `tool-manifest.json`. Ambient Pi extensions, skills, prompt templates, and context files are disabled.
 
-> Before reading implementation files, locate the relevant business capability with `npm run nazare:registry -- find <query> capability`, then compile the requested change with `npm run nazare:registry -- compile <capability-id> <requested-change>`. Treat the compiled source projection, executable bindings, policies, evidence, and verification requirements as the task boundary. Expand outside it only if verification demonstrates that the projection is incomplete.
+This experiment currently enables the fixed coding toolset:
 
-Suggested sequence:
-
-```sh
-npm run nazare:registry -- find "email subscriber" capability
-npm run nazare:registry -- compile capability.collect-email-subscribers "Require explicit marketing consent before newsletter signup"
+```json
+{
+  "allow": ["read", "bash", "edit", "write"],
+  "extensions": []
+}
 ```
+
+Custom project tools can be added as pinned Pi extensions and named in the allowlist.
 
 ## Verification gate
 
-Both arms must finish with all of:
+Run must finish with all of:
 
 ```sh
-npm run lint
-npm test
-npm run typecheck
-npm run build
+pnpm lint
+pnpm test
+pnpm typecheck
+pnpm build
 ```
 
-A run that does not pass the full gate is not successful.
+Run that does not pass full gate is unsuccessful.
 
 ## Record
 
-- wall-clock duration
-- model tokens, if available
-- repository search commands
-- files read before the first correct architectural file
-- files read outside the compiled projection
+- completion status and wall-clock duration
+- model usage and cost, when available
+- tool calls, inputs, bounded outputs, latency, and failures
 - files changed
-- verification attempts
-- repair loops
-- final gate result
+- partial or final patch
+- verification attempts and results
 - whether surface, binding, capability policy, provider boundary, and evidence remain consistent
 
-The primary signal is **solve + verify + repair cost under a hard correctness gate**, not raw generation speed.
-
-## Interpretation
-
-We want to see a qualitative shape change:
-
-- compiled task instead of repo reconstruction
-- complete executable neighborhood before source expansion
-- fewer irrelevant reads
-- fewer architecture violations
-- lower repair cost
-
-If the compiled arm still has to rediscover required files outside the projection, that is evidence of a missing graph edge and should be fixed in the representation before adding more agent sophistication.
+Primary signal: **solve and verify under pinned environment and hard correctness gate**. Full Pi transcript remains an artifact; token-level reasoning is not an effectiveness metric.

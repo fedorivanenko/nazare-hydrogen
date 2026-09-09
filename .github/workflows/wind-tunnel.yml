@@ -12,14 +12,6 @@ on:
         required: true
         default: experiments/luna-operability/experiment-02-marketing-consent.json
         type: string
-      arm:
-        description: Experiment arm
-        required: true
-        default: nazare
-        type: choice
-        options:
-          - nazare
-          - raw
 
 permissions:
   contents: read
@@ -62,8 +54,7 @@ jobs:
       - name: Lint experiment configuration
         env:
           EXPERIMENT: ${{ inputs.experiment }}
-          ARM: ${{ inputs.arm }}
-        run: node scripts/lint-wind-tunnel-experiments.mjs "$EXPERIMENT" "$ARM"
+        run: node scripts/lint-wind-tunnel-experiments.mjs "$EXPERIMENT"
 
       - name: Start Wind Tunnel run
         id: start
@@ -73,7 +64,6 @@ jobs:
           SUBJECT_REPO: ${{ steps.pr.outputs.repo }}
           SUBJECT_SHA: ${{ steps.pr.outputs.sha }}
           EXPERIMENT: ${{ inputs.experiment }}
-          ARM: ${{ inputs.arm }}
         run: |
           set -euo pipefail
           test -n "$WIND_TUNNEL_URL"
@@ -82,8 +72,7 @@ jobs:
             --arg repository "$SUBJECT_REPO" \
             --arg sourceSha "$SUBJECT_SHA" \
             --arg experiment "$EXPERIMENT" \
-            --arg arm "$ARM" \
-            '{repository:$repository,sourceSha:$sourceSha,experiment:$experiment,arm:$arm}')
+            '{repository:$repository,sourceSha:$sourceSha,experiment:$experiment}')
           response_file="$RUNNER_TEMP/wind-tunnel-start.json"
           http_code=$(curl --silent --show-error \
             -o "$response_file" -w '%{http_code}' \
@@ -183,7 +172,6 @@ jobs:
           RUN_ID: ${{ steps.start.outputs.run_id }}
           SHA: ${{ steps.pr.outputs.sha }}
           EXPERIMENT: ${{ inputs.experiment }}
-          ARM: ${{ inputs.arm }}
           STATUS: ${{ steps.result.outputs.status }}
           OUTCOME: ${{ steps.result.outputs.outcome }}
           ELAPSED_MS: ${{ steps.result.outputs.elapsed_ms }}
@@ -199,7 +187,6 @@ jobs:
             echo "| PR | #${{ inputs.pr }} |"
             echo "| SHA | \`$SHA\` |"
             echo "| Experiment | \`$EXPERIMENT\` |"
-            echo "| Arm | \`$ARM\` |"
             echo "| Status | ${STATUS:-unknown} |"
             echo "| Outcome | ${OUTCOME:-pending} |"
             echo "| Elapsed | ${ELAPSED_MS:-0} ms |"

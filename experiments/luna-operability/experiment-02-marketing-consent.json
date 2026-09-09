@@ -7,9 +7,9 @@
     "thinking": "low",
     "timeoutMs": 30000
   },
-  "nazare": {
-    "capabilityId": "capability.collect-email-subscribers",
-    "requestedChange": "Require explicit marketing consent before newsletter signup"
+  "tools": {
+    "allow": ["read", "bash", "edit", "write"],
+    "extensions": []
   },
   "verification": [
     "pnpm lint",
