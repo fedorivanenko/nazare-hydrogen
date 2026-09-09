@@ -28,7 +28,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - name: Resolve exact PR head SHA
         id: pr
@@ -92,25 +92,46 @@ jobs:
           RUN_ID: ${{ steps.start.outputs.run_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 120); do
+          remote_done=0
+          cancel_remote() {
+            if [[ "$remote_done" != "1" && -n "${RUN_ID:-}" ]]; then
+              echo "Cancelling remote Wind Tunnel run $RUN_ID"
+              curl --silent --show-error --fail \
+                -X POST \
+                -H "Authorization: Bearer $WIND_TUNNEL_TOKEN" \
+                "$WIND_TUNNEL_URL/runs/$RUN_ID/cancel" >/dev/null || true
+            fi
+          }
+          trap cancel_remote EXIT INT TERM
+
+          for attempt in $(seq 1 90); do
             response=$(curl --fail --silent --show-error \
               -H "Authorization: Bearer $WIND_TUNNEL_TOKEN" \
               "$WIND_TUNNEL_URL/runs/$RUN_ID")
             status=$(jq -r '.status' <<<"$response")
             outcome=$(jq -r '.outcome // ""' <<<"$response")
             elapsed=$(jq -r '.elapsedMs // 0' <<<"$response")
-            echo "[$attempt] status=$status outcome=${outcome:-pending} elapsedMs=$elapsed"
+            error_code=$(jq -r '.errorCode // ""' <<<"$response")
+            error=$(jq -r '.error // ""' <<<"$response")
+            echo "[$attempt] status=$status outcome=${outcome:-pending} elapsedMs=$elapsed errorCode=${error_code:-none}"
 
             case "$status" in
               completed|failed|cancelled)
+                remote_done=1
                 echo "status=$status" >> "$GITHUB_OUTPUT"
                 echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
                 echo "elapsed_ms=$elapsed" >> "$GITHUB_OUTPUT"
+                echo "error_code=$error_code" >> "$GITHUB_OUTPUT"
+                {
+                  echo 'error<<EOF'
+                  echo "$error"
+                  echo 'EOF'
+                } >> "$GITHUB_OUTPUT"
                 echo "$response" > "$RUNNER_TEMP/wind-tunnel-result.json"
                 break
                 ;;
             esac
-            sleep 10
+            sleep 2
           done
 
           if [[ ! -f "$RUNNER_TEMP/wind-tunnel-result.json" ]]; then
@@ -121,6 +142,7 @@ jobs:
       - name: Publish summary
         if: always() && steps.start.outputs.run_id != ''
         env:
+          WIND_TUNNEL_URL: ${{ vars.WIND_TUNNEL_URL }}
           RUN_ID: ${{ steps.start.outputs.run_id }}
           SHA: ${{ steps.pr.outputs.sha }}
           EXPERIMENT: ${{ inputs.experiment }}
@@ -128,6 +150,8 @@ jobs:
           STATUS: ${{ steps.result.outputs.status }}
           OUTCOME: ${{ steps.result.outputs.outcome }}
           ELAPSED_MS: ${{ steps.result.outputs.elapsed_ms }}
+          ERROR_CODE: ${{ steps.result.outputs.error_code }}
+          ERROR: ${{ steps.result.outputs.error }}
         run: |
           {
             echo "## Wind Tunnel"
@@ -142,6 +166,16 @@ jobs:
             echo "| Status | ${STATUS:-unknown} |"
             echo "| Outcome | ${OUTCOME:-pending} |"
             echo "| Elapsed | ${ELAPSED_MS:-0} ms |"
+            echo "| Error code | ${ERROR_CODE:-none} |"
+            echo
+            echo "Dashboard: $WIND_TUNNEL_URL/wind-tunnel"
+            if [[ -n "${ERROR:-}" ]]; then
+              echo
+              echo '```text'
+              printf '%s\n' "$ERROR" | head -c 4000
+              echo
+              echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enforce verdict
@@ -149,8 +183,14 @@ jobs:
         env:
           STATUS: ${{ steps.result.outputs.status }}
           OUTCOME: ${{ steps.result.outputs.outcome }}
+          ERROR_CODE: ${{ steps.result.outputs.error_code }}
+          ERROR: ${{ steps.result.outputs.error }}
         run: |
           if [[ "$STATUS" != "completed" || "$OUTCOME" != "pass" ]]; then
-            echo "Wind Tunnel verdict: status=$STATUS outcome=$OUTCOME" >&2
+            echo "Wind Tunnel FAILED: status=$STATUS outcome=${OUTCOME:-none} errorCode=${ERROR_CODE:-none}" >&2
+            if [[ -n "${ERROR:-}" ]]; then
+              printf '%s\n' "$ERROR" >&2
+            fi
             exit 1
           fi
+          echo "Wind Tunnel PASS"
