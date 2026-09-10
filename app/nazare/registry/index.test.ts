@@ -64,6 +64,12 @@ test("task compiler projects the executable neighborhood and invariants", () => 
 	if (!compiled.ok) return;
 
 	assert.ok(compiled.sourceFiles.includes("app/root.tsx"));
+	assert.deepEqual(compiled.mutationSet.files, [...compiled.sourceFiles].sort());
+	assert.ok(compiled.mutationSet.files.includes("app/root.tsx"));
+	assert.deepEqual(
+		compiled.mutationSet.protectedFiles,
+		[".wind-tunnel", "experiments", ".github"],
+	);
 	assert.deepEqual(
 		compiled.executableBindings.map((binding) => binding.id),
 		["binding.route.root.hero-email-signup"],
@@ -75,5 +81,9 @@ test("task compiler projects the executable neighborhood and invariants", () => 
 	assert.deepEqual(
 		compiled.constraints.requiredEvidence.map((evidence) => evidence.id),
 		["contact-created"],
+	);
+	assert.deepEqual(
+		compiled.verificationPlan.map((step) => step.tier),
+		["structural", "focused", "behavioral", "full"],
 	);
 });

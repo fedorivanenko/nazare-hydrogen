@@ -51,6 +51,8 @@ for (const sourceFile of contextFiles) {
 process.stdout.write(
 	JSON.stringify({
 		selectedCapability: { id: capability.id, intent: capability.intent },
+		mutationSet: compiled.mutationSet,
+		verificationPlan: compiled.verificationPlan,
 		compiledContext: compiled,
 		sourceExcerpts,
 		relatedTestFiles,
