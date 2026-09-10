@@ -21,7 +21,7 @@ const input = JSON.parse(
 const task = typeof input.task === "string" ? input.task.trim() : "";
 if (!task) throw new Error("Bootstrap input.task must be a non-empty string");
 const capability = findEntities(task, "capability")[0];
-if (!capability || capability.kind !== "capability")
+if (capability?.kind !== "capability")
 	throw new Error("No Nazare capability matched requested change");
 const compiled = compileCapabilityTask(capability.id, task);
 if (!compiled.ok) throw new Error(compiled.error);
