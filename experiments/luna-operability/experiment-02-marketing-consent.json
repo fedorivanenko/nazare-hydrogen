@@ -8,8 +8,19 @@
     "timeoutMs": 30000
   },
   "tools": {
-    "allow": ["read", "bash", "edit", "write", "nazare_find", "nazare_inspect", "nazare_compile"],
-    "extensions": [".wind-tunnel/nazare-tools.ts"],
+    "allow": [
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "apply_patch",
+      "nazare_find",
+      "nazare_inspect",
+      "nazare_compile"
+    ],
+    "extensions": [
+      ".wind-tunnel/nazare-tools.ts"
+    ],
     "bootstrap": [
       {
         "id": "nazare-task-context",

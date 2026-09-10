@@ -13,6 +13,7 @@
       "bash",
       "edit",
       "write",
+      "apply_patch",
       "nazare_find",
       "nazare_inspect",
       "nazare_compile"

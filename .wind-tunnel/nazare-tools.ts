@@ -1,3 +1,4 @@
+import {spawnSync} from 'node:child_process';
 import {Type} from 'typebox';
 import {compileCapabilityTask, expandEntity, findEntities, inspectEntity} from '../app/nazare/registry/agent';
 
@@ -8,6 +9,22 @@ function result(value: unknown) {
 type ToolRegistrar = {registerTool(definition:unknown):void};
 
 export default function registerNazareTools(pi: ToolRegistrar) {
+  pi.registerTool({
+    name:'apply_patch',
+    label:'Apply Patch',
+    description:'Apply a valid unified diff to one or more repository files. Use this instead of invoking an apply_patch shell command or embedding diff markers in edit replacement text.',
+    promptSnippet:'Use apply_patch for coordinated or multi-file edits; pass only a valid unified diff in patch',
+    parameters:Type.Object({patch:Type.String({description:'Valid unified diff, including --- and +++ file headers and @@ hunks'})}),
+    async execute(_toolCallId:string,params:{patch:string}){
+      if(Buffer.byteLength(params.patch)>100_000)throw new Error('Patch exceeds 100000 bytes');
+      const check=spawnSync('git',['apply','--check','--whitespace=nowarn','-'],{cwd:process.cwd(),input:params.patch,encoding:'utf8'});
+      if(check.status!==0)return {content:[{type:'text' as const,text:`Patch rejected: ${check.stderr||check.stdout||`git apply --check exited ${check.status}`}`}],details:{applied:false,error:check.stderr||check.stdout},isError:true};
+      const applied=spawnSync('git',['apply','--whitespace=nowarn','-'],{cwd:process.cwd(),input:params.patch,encoding:'utf8'});
+      if(applied.status!==0)return {content:[{type:'text' as const,text:`Patch failed: ${applied.stderr||applied.stdout||`git apply exited ${applied.status}`}`}],details:{applied:false,error:applied.stderr||applied.stdout},isError:true};
+      return {content:[{type:'text' as const,text:'Patch applied successfully.'}],details:{applied:true}};
+    },
+  });
+
   pi.registerTool({
     name:'nazare_find',
     label:'Nazare Find',
