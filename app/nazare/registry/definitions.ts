@@ -59,7 +59,7 @@ export const collectEmailSubscribersDefinition = defineCapability({
 		},
 		{
 			file: "app/nazare/capabilities/collect-email-subscribers.ts",
-			symbols: ["collectEmailSubscribers"],
+			symbols: ["policyImplementations", "collectEmailSubscribers"],
 		},
 		{
 			file: "app/nazare/carcass/sections/Hero.tsx",
