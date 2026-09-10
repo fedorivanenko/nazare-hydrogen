@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -52,9 +53,30 @@ export async function executeNazareOperation(
 		const patch = String(input.patch ?? "");
 		if (Buffer.byteLength(patch) > 100_000)
 			throw new Error("Patch exceeds 100000 bytes");
+		const files = await applyPatchText(process.cwd(), patch);
+		const validation = spawnSync(
+			"pnpm",
+			["exec", "tsx", "app/nazare/lint/cli.ts"],
+			{
+				cwd: process.cwd(),
+				encoding: "utf8",
+				timeout: 5_000,
+			},
+		);
+		const diagnostics =
+			`${validation.stdout ?? ""}${validation.stderr ?? ""}`.trim();
 		return {
 			applied: true,
-			files: await applyPatchText(process.cwd(), patch),
+			files,
+			contractValidation: {
+				passed: validation.status === 0,
+				diagnostics,
+			},
+			...(validation.status === 0
+				? {}
+				: {
+						next: "Repair contract validation diagnostics before calling finish_run.",
+					}),
 		};
 	}
 	throw new Error(`Unknown Nazare operation: ${operation}`);
