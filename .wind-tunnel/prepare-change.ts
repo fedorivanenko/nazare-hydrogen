@@ -17,9 +17,11 @@ if(!capability||capability.kind!=='capability')throw new Error('No Nazare capabi
 const compiled=compileCapabilityTask(capability.id,task);
 if(!compiled.ok)throw new Error(compiled.error);
 
-let remainingExcerptBytes=16_000;
+const relatedTestFiles=['app/nazare/registry/index.test.ts'];
+const contextFiles=Array.from(new Set([...compiled.sourceFiles,...relatedTestFiles]));
+let remainingExcerptBytes=18_000;
 const sourceExcerpts=[];
-for(const sourceFile of compiled.sourceFiles){
+for(const sourceFile of contextFiles){
   if(remainingExcerptBytes<=0)break;
   const absolutePath=path.resolve(process.cwd(),sourceFile);
   if(!absolutePath.startsWith(`${path.resolve(process.cwd())}${path.sep}`))continue;
@@ -35,5 +37,6 @@ process.stdout.write(JSON.stringify({
   selectedCapability:{id:capability.id,intent:capability.intent},
   compiledContext:compiled,
   sourceExcerpts,
-  targetedChecks:['pnpm test'],
+  relatedTestFiles,
+  evaluatorVerification:['pnpm lint','pnpm test','pnpm typecheck','pnpm build'],
 }));
