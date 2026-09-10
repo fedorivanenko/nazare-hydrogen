@@ -34,6 +34,15 @@ function validate(definition, file) {
     if (!tools || typeof tools !== 'object' || Array.isArray(tools)) errors.push(fail(file, 'tools must be an object'));
     if (tools?.allow != null && (!Array.isArray(tools.allow) || tools.allow.length === 0 || tools.allow.some((name) => typeof name !== 'string' || !name.trim()))) errors.push(fail(file, 'tools.allow must be a non-empty array of tool names'));
     if (tools?.extensions != null && (!Array.isArray(tools.extensions) || tools.extensions.some((extension) => !safeRelative(extension)))) errors.push(fail(file, 'tools.extensions must contain safe repo-relative paths'));
+    if (tools?.bootstrap != null && !Array.isArray(tools.bootstrap)) errors.push(fail(file, 'tools.bootstrap must be an array'));
+    else tools?.bootstrap?.forEach((item,index)=>{
+      if(!item||typeof item!=='object'||Array.isArray(item)) {errors.push(fail(file,`tools.bootstrap[${index}] must be an object`));return;}
+      if(!safeRelative(item.entrypoint)) errors.push(fail(file,`tools.bootstrap[${index}].entrypoint must be a safe repo-relative path`));
+      if(item.id!=null&&(typeof item.id!=='string'||!item.id.trim())) errors.push(fail(file,`tools.bootstrap[${index}].id must be a non-empty string`));
+      if(item.timeoutMs!=null&&(!Number.isInteger(item.timeoutMs)||item.timeoutMs<100||item.timeoutMs>30_000)) errors.push(fail(file,`tools.bootstrap[${index}].timeoutMs must be an integer from 100 to 30000`));
+      if(item.maxOutputBytes!=null&&(!Number.isInteger(item.maxOutputBytes)||item.maxOutputBytes<1_024||item.maxOutputBytes>100_000)) errors.push(fail(file,`tools.bootstrap[${index}].maxOutputBytes must be an integer from 1024 to 100000`));
+      if(item.required!=null&&typeof item.required!=='boolean') errors.push(fail(file,`tools.bootstrap[${index}].required must be boolean`));
+    });
   }
 
   if (!Array.isArray(definition.verification) || definition.verification.length === 0) {
@@ -76,7 +85,7 @@ for (const absolute of files) {
     if (!info.isFile()) throw new Error('not a file');
     const definition = JSON.parse(await readFile(absolute, 'utf8'));
     errors.push(...validate(definition, relative));
-    for (const referencedPath of [definition.taskFile, ...(definition.tools?.extensions ?? [])]) {
+    for (const referencedPath of [definition.taskFile, ...(definition.tools?.extensions ?? []), ...(definition.tools?.bootstrap ?? []).map(item=>item?.entrypoint)]) {
       if (!safeRelative(referencedPath)) continue;
       const target = path.resolve(root, referencedPath);
       if (!target.startsWith(`${root}${path.sep}`)) errors.push(fail(relative, `${referencedPath} resolves outside repository`));

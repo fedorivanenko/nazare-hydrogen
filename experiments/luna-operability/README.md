@@ -32,11 +32,18 @@ This experiment enables fixed coding tools plus pinned Nazare registry tools:
 ```json
 {
   "allow": ["read", "bash", "edit", "write", "nazare_find", "nazare_inspect", "nazare_compile"],
-  "extensions": [".wind-tunnel/nazare-tools.ts"]
+  "extensions": [".wind-tunnel/nazare-tools.ts"],
+  "bootstrap": [{
+    "id": "nazare-task-context",
+    "entrypoint": ".wind-tunnel/prepare-change.ts",
+    "timeoutMs": 3000,
+    "maxOutputBytes": 24000,
+    "required": true
+  }]
 }
 ```
 
-Nazare tools expose registry search, entity-neighborhood inspection, and capability-change compilation directly to model.
+Worker first executes pinned `.wind-tunnel/prepare-change.ts` and gives model bounded capability context plus focused source excerpts. Nazare tools then expose registry search, entity-neighborhood inspection, and capability-change compilation for model follow-up. Primary experiment uses `openai/gpt-oss-120b`; `gpt-oss-20b` remains lower-capacity comparison baseline.
 
 ## Verification gate
 
