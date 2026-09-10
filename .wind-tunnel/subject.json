@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "runtime": {
+    "node": "24",
+    "packageManager": "pnpm@10.17.1"
+  },
+  "dependencies": {
+    "lockfile": "pnpm-lock.yaml",
+    "install": "pnpm install --frozen-lockfile --offline"
+  },
+  "compile": {
+    "entrypoint": ".wind-tunnel/compile-subject.ts",
+    "output": "/workspace/.wind-tunnel-subject.json"
+  }
+}
