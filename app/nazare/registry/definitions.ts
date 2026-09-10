@@ -46,12 +46,17 @@ export const collectEmailSubscribersDefinition = defineCapability({
 		"app/root.tsx",
 	],
 	mutationFiles: [
+		"app/nazare/registry/definitions.ts",
 		"app/nazare/capabilities/collect-email-subscribers.ts",
 		"app/nazare/carcass/sections/Hero.tsx",
 		"app/nazare/connectors/resend.server.ts",
 		"app/root.tsx",
 	],
 	mutationTargets: [
+		{
+			file: "app/nazare/registry/definitions.ts",
+			symbols: ["collectEmailSubscribersDefinition"],
+		},
 		{
 			file: "app/nazare/capabilities/collect-email-subscribers.ts",
 			symbols: ["collectEmailSubscribers"],

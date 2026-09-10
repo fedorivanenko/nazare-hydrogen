@@ -67,7 +67,13 @@ test("task compiler separates readable context from writable files", () => {
 		compiled.readSet.files.includes("app/nazare/registry/definitions.ts"),
 	);
 	assert.ok(
-		!compiled.mutationSet.files.includes("app/nazare/registry/definitions.ts"),
+		compiled.mutationSet.files.includes("app/nazare/registry/definitions.ts"),
+	);
+	assert.deepEqual(
+		compiled.mutationSet.targets.find(
+			(target) => target.file === "app/nazare/registry/definitions.ts",
+		)?.symbols,
+		["collectEmailSubscribersDefinition"],
 	);
 	assert.ok(compiled.mutationSet.files.includes("app/root.tsx"));
 	assert.ok(
