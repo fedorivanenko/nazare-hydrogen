@@ -66,21 +66,26 @@ jobs:
           test -n "$EVE_URL"
           test -n "$EVE_TOKEN"
           archive=$(base64 -w 0 "$RUNNER_TEMP/source.tar.gz")
-          message="Implement Wind Tunnel experiment $EXPERIMENT for $SUBJECT_REPO at exact source SHA $SUBJECT_SHA. First call prepare_subject with this experiment path. After implementation call finish_run."
+          archive_sha256=$(sha256sum "$RUNNER_TEMP/source.tar.gz" | cut -d' ' -f1)
           jq -nc \
-            --arg message "$message" \
-            --arg archive "$archive" \
+            --arg archiveBase64 "$archive" \
+            --arg archiveSha256 "$archive_sha256" \
             --arg operationId "$GITHUB_REPOSITORY:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT" \
             --arg repository "$SUBJECT_REPO" \
             --arg sourceSha "$SUBJECT_SHA" \
-            --arg experiment "$EXPERIMENT" \
-            '{operationId:$operationId,message:[{type:"text",text:$message},{type:"file",data:("data:application/gzip;base64,"+$archive),mediaType:"application/gzip",filename:"source.tar.gz"}],clientContext:{repository:$repository,sourceSha:$sourceSha,experiment:$experiment,runtime:"eve@0.52.5",sandbox:"vercel"}}' \
+            --arg experimentPath "$EXPERIMENT" \
+            --arg workflowRunId "$GITHUB_RUN_ID" \
+            --arg workflowRunAttempt "$GITHUB_RUN_ATTEMPT" \
+            '{operationId:$operationId,repository:$repository,sourceSha:$sourceSha,experimentPath:$experimentPath,archiveBase64:$archiveBase64,archiveSha256:$archiveSha256,trigger:{provider:"github-actions",workflowRunId:$workflowRunId,workflowRunAttempt:$workflowRunAttempt}}' \
             > "$RUNNER_TEMP/eve-request.json"
           response=$(curl --fail --silent --show-error \
             -X POST -H "Authorization: Bearer $EVE_TOKEN" -H "Content-Type: application/json" \
-            "$EVE_URL/eve/v1/session" --data-binary @"$RUNNER_TEMP/eve-request.json")
+            "$EVE_URL/api/runs" --data-binary @"$RUNNER_TEMP/eve-request.json")
+          run_id=$(jq -r '.runId' <<<"$response")
           session_id=$(jq -r '.sessionId' <<<"$response")
+          [[ "$run_id" =~ ^[0-9a-f-]{36}$ ]]
           [[ "$session_id" == wrun_* ]]
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "session_id=$session_id" >> "$GITHUB_OUTPUT"
           stream="$RUNNER_TEMP/eve-events.ndjson"
           for attempt in $(seq 1 8); do
