@@ -87,26 +87,21 @@ jobs:
           [[ "$session_id" == wrun_* ]]
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "session_id=$session_id" >> "$GITHUB_OUTPUT"
-          stream="$RUNNER_TEMP/eve-events.ndjson"
-          for attempt in $(seq 1 8); do
-            code=$(curl --silent --show-error -o "$stream" -w '%{http_code}' \
-              -H "Authorization: Bearer $EVE_TOKEN" "$EVE_URL/eve/v1/session/$session_id/stream")
-            [[ "$code" = 200 ]] && break
-            sleep 1
+          detail="$RUNNER_TEMP/eve-run.json"
+          for attempt in $(seq 1 300); do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $EVE_TOKEN" "$EVE_URL/api/runs/$run_id" > "$detail"
+            status=$(jq -r '.run.status' "$detail")
+            [[ "$status" =~ ^(completed|failed|cancelled)$ ]] && break
+            sleep 2
           done
-          [[ "${code:-}" = 200 ]]
-          jq -c 'if .type=="message.received" then .data.parts |= map(if .type=="file" then .url="[inline attachment redacted]" else . end) else . end' "$stream" > "$stream.redacted"
-          mv "$stream.redacted" "$stream"
-          if grep -Eq '"type":"(turn|session)\.failed"' "$stream"; then
-            echo "eve turn failed" >&2
-            tail -20 "$stream" >&2
-            exit 1
-          fi
-          finish=$(grep '"type":"action.result"' "$stream" | jq -sc '[.[] | select(.data.result.toolName=="finish_run" and (.data.result.isError // false | not))] | last')
+          [[ "$status" = completed ]]
+          jq -c '.events[] | if .type=="message.received" then .data.parts |= map(if .type=="file" then .url="[inline attachment redacted]" else . end) else . end' "$detail" > "$RUNNER_TEMP/eve-events.ndjson"
+          finish=$(jq -c '[.events[] | select(.type=="action.result" and .data.result.toolName=="finish_run" and (.data.result.isError // false | not))] | last' "$detail")
           test "$finish" != "null"
           passed=$(jq -r '.data.result.output.passed' <<<"$finish")
           changed=$(jq -c '.data.result.output.changedFiles' <<<"$finish")
-          message=$(grep '"type":"message.completed"' "$stream" | jq -sr 'last.data.message // ""')
+          message=$(jq -r '[.events[] | select(.type=="message.completed")] | last.data.message // ""' "$detail")
           jq -n --arg sessionId "$session_id" --argjson passed "$passed" --argjson changedFiles "$changed" --arg message "$message" \
             '{sessionId:$sessionId,passed:$passed,changedFiles:$changedFiles,message:$message}' > "$RUNNER_TEMP/eve-result.json"
           cat "$RUNNER_TEMP/eve-result.json"

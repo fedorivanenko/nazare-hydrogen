@@ -1,40 +1,32 @@
 {
-  "id": "marketing-consent-02-20b-bootstrap",
-  "taskFile": "experiments/luna-operability/task-02-marketing-consent.md",
-  "agent": {
-    "provider": "vercel-ai-gateway",
-    "model": "openai/gpt-oss-20b",
-    "thinking": "low",
-    "timeoutMs": 30000
-  },
-  "tools": {
-    "allow": [
-      "read",
-      "edit",
-      "write",
-      "apply_patch",
-      "nazare_find",
-      "nazare_inspect",
-      "nazare_compile"
-    ],
-    "extensions": [
-      ".wind-tunnel/nazare-tools.ts"
-    ],
-    "bootstrap": [
-      {
-        "id": "nazare-task-context",
-        "entrypoint": ".wind-tunnel/prepare-change.ts",
-        "timeoutMs": 3000,
-        "maxOutputBytes": 24000,
-        "required": true
-      }
-    ]
-  },
-  "verification": [
-    "pnpm exec tsx .wind-tunnel/verify-marketing-consent.ts",
-    "pnpm lint",
-    "pnpm test",
-    "pnpm typecheck",
-    "pnpm build"
-  ]
+	"id": "marketing-consent-02-20b-bootstrap",
+	"taskFile": "experiments/luna-operability/task-02-marketing-consent.md",
+	"agent": {
+		"provider": "vercel-ai-gateway",
+		"model": "openai/gpt-oss-20b",
+		"thinking": "low",
+		"timeoutMs": 30000
+	},
+	"tools": {
+		"allow": [
+			"read",
+			"edit",
+			"write",
+			"apply_patch",
+			"nazare_find",
+			"nazare_inspect",
+			"nazare_compile"
+		],
+		"extensions": [".wind-tunnel/nazare-tools.ts"],
+		"bootstrap": [
+			{
+				"id": "nazare-task-context",
+				"entrypoint": ".wind-tunnel/prepare-change.ts",
+				"timeoutMs": 3000,
+				"maxOutputBytes": 24000,
+				"required": true
+			}
+		]
+	},
+	"evaluator": "marketing-consent-v2"
 }

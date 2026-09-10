@@ -1,12 +1,15 @@
 {
-  "id": "tool-handshake-read-120b",
-  "taskFile": "experiments/tool-handshake/task-read.md",
-  "agent": {
-    "provider": "vercel-ai-gateway",
-    "model": "openai/gpt-oss-120b",
-    "thinking": "low",
-    "timeoutMs": 30000
-  },
-  "tools": {"allow": ["read"], "extensions": []},
-  "verification": ["node -e \"process.exit(0)\""]
+	"id": "tool-handshake-read-120b",
+	"taskFile": "experiments/tool-handshake/task-read.md",
+	"agent": {
+		"provider": "vercel-ai-gateway",
+		"model": "openai/gpt-oss-120b",
+		"thinking": "low",
+		"timeoutMs": 30000
+	},
+	"tools": {
+		"allow": ["read"],
+		"extensions": []
+	},
+	"evaluator": "noop-v1"
 }
