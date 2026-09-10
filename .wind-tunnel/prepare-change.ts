@@ -125,10 +125,11 @@ process.stdout.write(
 		selectedCapability: { id: capability.id, intent: capability.intent },
 		mutationSet: { ...compiled.mutationSet, ranges: mutationRanges },
 		verificationPlan: compiled.verificationPlan,
-		compiledContext: compiled,
 		sourceExcerpts,
 		relatedTestFiles,
 		implementationChecklist: [
+			"Use sourceExcerpts directly; do not spend model-phase tool calls rereading files already included there.",
+			"Apply complete edits across every affected file before verification; avoid partial patches that require corrective exploration.",
 			"When route inputs or capability calls change, update both executable binding inputs and its invocation evidence to match source exactly.",
 			"When capability policy behavior changes, update both policy declarations and policy implementations.",
 			"Preserve provider adapters unless the requested change explicitly targets provider behavior.",
