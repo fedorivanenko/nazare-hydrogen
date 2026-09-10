@@ -52,6 +52,12 @@ export type CapabilityBinding = {
 	inputs: readonly CapabilityBindingInput[];
 };
 
+export type CapabilityMutationTarget = {
+	file: string;
+	/** Top-level symbols that may be changed in this file. */
+	symbols: readonly string[];
+};
+
 export type CapabilityDefinition = RegistryEntityBase<
 	"capability",
 	CapabilityId
@@ -63,6 +69,8 @@ export type CapabilityDefinition = RegistryEntityBase<
 	bindings: readonly CapabilityBinding[];
 	/** Explicit files the operator/agent may mutate for this capability. */
 	mutationFiles: readonly string[];
+	/** Optional symbol-level narrowing inside mutationFiles. */
+	mutationTargets?: readonly CapabilityMutationTarget[];
 };
 
 export type CarcassDefinition = RegistryEntityBase<"carcass", CarcassId> & {
