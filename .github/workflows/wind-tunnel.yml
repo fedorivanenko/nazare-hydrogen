@@ -1,6 +1,7 @@
 name: Run eve Wind Tunnel
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       pr:
@@ -26,7 +27,7 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
         run: |
           set -euo pipefail
           response=$(curl --fail --silent --show-error \
@@ -47,7 +48,7 @@ jobs:
 
       - name: Validate and archive source
         env:
-          EXPERIMENT: ${{ inputs.experiment }}
+          EXPERIMENT: ${{ inputs.experiment || 'experiments/luna-operability/experiment-02-marketing-consent.json' }}
         run: |
           set -euo pipefail
           node scripts/lint-wind-tunnel-experiments.mjs "$EXPERIMENT"
@@ -60,7 +61,7 @@ jobs:
           EVE_TOKEN: ${{ secrets.WIND_TUNNEL_TOKEN }}
           SUBJECT_REPO: ${{ steps.pr.outputs.repo }}
           SUBJECT_SHA: ${{ steps.pr.outputs.sha }}
-          EXPERIMENT: ${{ inputs.experiment }}
+          EXPERIMENT: ${{ inputs.experiment || 'experiments/luna-operability/experiment-02-marketing-consent.json' }}
         run: |
           set -euo pipefail
           test -n "$EVE_URL"
@@ -101,9 +102,11 @@ jobs:
           test "$finish" != "null"
           passed=$(jq -r '.data.result.output.passed' <<<"$finish")
           changed=$(jq -c '.data.result.output.changedFiles' <<<"$finish")
+          timings=$(jq -c '.data.result.output.timings' <<<"$finish")
+          boundary=$(jq -c '.data.result.output.mutationBoundary' <<<"$finish")
           message=$(jq -r '[.events[] | select(.type=="message.completed")] | last.data.message // ""' "$detail")
-          jq -n --arg sessionId "$session_id" --argjson passed "$passed" --argjson changedFiles "$changed" --arg message "$message" \
-            '{sessionId:$sessionId,passed:$passed,changedFiles:$changedFiles,message:$message}' > "$RUNNER_TEMP/eve-result.json"
+          jq -n --arg sessionId "$session_id" --argjson passed "$passed" --argjson changedFiles "$changed" --argjson timings "$timings" --argjson mutationBoundary "$boundary" --arg message "$message" \
+            '{sessionId:$sessionId,passed:$passed,changedFiles:$changedFiles,timings:$timings,mutationBoundary:$mutationBoundary,message:$message}' > "$RUNNER_TEMP/eve-result.json"
           cat "$RUNNER_TEMP/eve-result.json"
           test "$passed" = true
 
@@ -112,11 +115,11 @@ jobs:
         env:
           SESSION_ID: ${{ steps.eve.outputs.session_id }}
           EVE_URL: ${{ vars.EVE_WIND_TUNNEL_URL }}
-          EXPERIMENT: ${{ inputs.experiment }}
+          EXPERIMENT: ${{ inputs.experiment || 'experiments/luna-operability/experiment-02-marketing-consent.json' }}
           SHA: ${{ steps.pr.outputs.sha }}
         run: |
           {
-            echo "## eve Wind Tunnel"
+            echo "## eve Wind Tunnel benchmark"
             echo
             echo "- Session: \`$SESSION_ID\`"
             echo "- Source: \`$SHA\`"
