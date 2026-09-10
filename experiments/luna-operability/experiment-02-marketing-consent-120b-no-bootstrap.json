@@ -1,0 +1,31 @@
+{
+  "id": "marketing-consent-02-20b-no-bootstrap",
+  "taskFile": "experiments/luna-operability/task-02-marketing-consent.md",
+  "agent": {
+    "provider": "vercel-ai-gateway",
+    "model": "openai/gpt-oss-120b",
+    "thinking": "low",
+    "timeoutMs": 30000
+  },
+  "tools": {
+    "allow": [
+      "read",
+      "edit",
+      "write",
+      "apply_patch",
+      "nazare_find",
+      "nazare_inspect",
+      "nazare_compile"
+    ],
+    "extensions": [
+      ".wind-tunnel/nazare-tools.ts"
+    ]
+  },
+  "verification": [
+    "pnpm exec tsx .wind-tunnel/verify-marketing-consent.ts",
+    "pnpm lint",
+    "pnpm test",
+    "pnpm typecheck",
+    "pnpm build"
+  ]
+}

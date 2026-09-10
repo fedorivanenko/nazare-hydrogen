@@ -1,0 +1,17 @@
+{
+	"id": "tool-handshake-nazare-find-20b",
+	"taskFile": "experiments/tool-handshake/task-nazare-find.md",
+	"evaluator": "noop-v1",
+	"agent": {
+		"provider": "vercel-ai-gateway",
+		"model": "openai/gpt-oss-20b",
+		"thinking": "low",
+		"timeoutMs": 30000
+	},
+	"tools": {
+		"manifest": ".wind-tunnel/tools.json",
+		"allow": ["nazare_find"],
+		"extensions": [".wind-tunnel/nazare-tools.ts"]
+	},
+	"verification": ["node -e \"process.exit(0)\""]
+}
