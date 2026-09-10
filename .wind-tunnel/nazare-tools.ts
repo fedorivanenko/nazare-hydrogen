@@ -1,3 +1,4 @@
+import {existsSync, lstatSync, realpathSync} from 'node:fs';
 import {mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {Type} from 'typebox';
@@ -12,8 +13,12 @@ type ToolRegistrar = {registerTool(definition:unknown):void};
 type PendingFile = {path:string;content:string|null};
 
 function safePath(root:string,relativePath:string){
-  const absolutePath=path.resolve(root,relativePath);
-  if(!absolutePath.startsWith(`${path.resolve(root)}${path.sep}`))throw new Error(`Patch path escapes repository: ${relativePath}`);
+  const rootPath=realpathSync(root);const parts=relativePath.split(/[\\/]/);
+  if(parts.includes('.git'))throw new Error(`Patch path targets forbidden git metadata: ${relativePath}`);
+  const absolutePath=path.resolve(rootPath,relativePath);
+  if(!absolutePath.startsWith(`${rootPath}${path.sep}`))throw new Error(`Patch path escapes repository: ${relativePath}`);
+  let current=rootPath;
+  for(const part of parts){current=path.join(current,part);if(existsSync(current)&&lstatSync(current).isSymbolicLink())throw new Error(`Patch path traverses symbolic link: ${relativePath}`);}
   return absolutePath;
 }
 
@@ -68,7 +73,7 @@ export async function applyPatchText(root:string,patchText:string){
     pending.push({path:absolutePath,content});
   }
   for(const file of pending){if(file.content===null)await rm(file.path);else{await mkdir(path.dirname(file.path),{recursive:true});await writeFile(file.path,file.content);}}
-  return pending.map(file=>path.relative(root,file.path));
+  return pending.map(file=>path.relative(realpathSync(root),file.path));
 }
 
 export default function registerNazareTools(pi: ToolRegistrar) {
