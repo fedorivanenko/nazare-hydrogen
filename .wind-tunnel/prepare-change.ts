@@ -128,6 +128,12 @@ process.stdout.write(
 		compiledContext: compiled,
 		sourceExcerpts,
 		relatedTestFiles,
+		implementationChecklist: [
+			"When route inputs or capability calls change, update both executable binding inputs and its invocation evidence to match source exactly.",
+			"When capability policy behavior changes, update both policy declarations and policy implementations.",
+			"Preserve provider adapters unless the requested change explicitly targets provider behavior.",
+			"Avoid broad types such as any; preserve strict TypeScript contracts.",
+		],
 		evaluatorVerification: [
 			"pnpm lint",
 			"pnpm test",
