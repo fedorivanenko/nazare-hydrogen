@@ -71,7 +71,23 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 			...providers.flatMap(({ entity }) => entity?.sourceFiles ?? []),
 			...capability.bindings.map((binding) => binding.sourceFile),
 		]),
-	);
+	).sort();
+
+	const mutationSet = {
+		files: sourceFiles,
+		protectedFiles: [
+			".wind-tunnel",
+			"experiments",
+			".github",
+		] as const,
+	};
+
+	const verificationPlan = [
+		{ tier: "structural" as const, intent: "Preserve declared capability policies and evidence contracts." },
+		{ tier: "focused" as const, intent: "Run Nazare registry and capability-specific tests." },
+		{ tier: "behavioral" as const, intent: "Run the experiment behavioral oracle." },
+		{ tier: "full" as const, intent: "Run typecheck and production build." },
+	];
 
 	return {
 		ok: true as const,
@@ -81,6 +97,7 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 			intent: capability.intent,
 		},
 		sourceFiles,
+		mutationSet,
 		executableBindings: capability.bindings,
 		constraints: {
 			policies: capability.policies,
@@ -95,15 +112,16 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 				intent: entity?.intent,
 			})),
 		},
+		verificationPlan,
 		verify: [
 			"Preserve every declared capability policy.",
 			"Preserve every required evidence contract.",
 			"Keep provider-specific behavior out of Carcass components.",
 			"Keep every executable binding consistent with the capability invocation.",
-			"Run npm run lint.",
-			"Run npm test.",
-			"Run npm run typecheck.",
-			"Run npm run build.",
+			"Run pnpm lint.",
+			"Run pnpm test.",
+			"Run pnpm typecheck.",
+			"Run pnpm build.",
 		],
 	};
 }
