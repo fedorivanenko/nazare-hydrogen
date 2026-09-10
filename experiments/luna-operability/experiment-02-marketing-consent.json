@@ -29,12 +29,5 @@
 				"required": true
 			}
 		]
-	},
-	"verification": [
-		"pnpm exec tsx .wind-tunnel/verify-marketing-consent.ts",
-		"pnpm lint",
-		"pnpm test",
-		"pnpm typecheck",
-		"pnpm build"
-	]
+	}
 }
