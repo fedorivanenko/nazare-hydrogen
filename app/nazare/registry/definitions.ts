@@ -51,6 +51,24 @@ export const collectEmailSubscribersDefinition = defineCapability({
 		"app/nazare/connectors/resend.server.ts",
 		"app/root.tsx",
 	],
+	mutationTargets: [
+		{
+			file: "app/nazare/capabilities/collect-email-subscribers.ts",
+			symbols: ["collectEmailSubscribers"],
+		},
+		{
+			file: "app/nazare/carcass/sections/Hero.tsx",
+			symbols: ["Hero"],
+		},
+		{
+			file: "app/nazare/connectors/resend.server.ts",
+			symbols: ["createResendContact"],
+		},
+		{
+			file: "app/root.tsx",
+			symbols: ["action", "App"],
+		},
+	],
 });
 
 export const heroDefinition = defineCarcass({
