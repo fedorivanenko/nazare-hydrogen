@@ -1,7 +1,8 @@
 name: Run eve Wind Tunnel
 
 on:
-  pull_request:
+  push:
+    branches: [bench/current-wind-tunnel]
   workflow_dispatch:
     inputs:
       pr:
@@ -27,7 +28,7 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          PR_NUMBER: ${{ inputs.pr || '17' }}
         run: |
           set -euo pipefail
           response=$(curl --fail --silent --show-error \
