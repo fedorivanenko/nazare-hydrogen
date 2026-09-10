@@ -1,4 +1,5 @@
-import {spawnSync} from 'node:child_process';
+import {mkdir, readFile, rm, writeFile} from 'node:fs/promises';
+import path from 'node:path';
 import {Type} from 'typebox';
 import {compileCapabilityTask, expandEntity, findEntities, inspectEntity} from '../app/nazare/registry/agent';
 
@@ -8,20 +9,62 @@ function result(value: unknown) {
 
 type ToolRegistrar = {registerTool(definition:unknown):void};
 
+type PendingFile = {path:string;content:string|null};
+
+function safePath(root:string,relativePath:string){
+  const absolutePath=path.resolve(root,relativePath);
+  if(!absolutePath.startsWith(`${path.resolve(root)}${path.sep}`))throw new Error(`Patch path escapes repository: ${relativePath}`);
+  return absolutePath;
+}
+
+export async function applyPatchText(root:string,patchText:string){
+  const lines=patchText.replace(/\r\n/g,'\n').trimEnd().split('\n');
+  if(lines[0]!=='*** Begin Patch'||lines.at(-1)!=='*** End Patch')throw new Error('Patch must use *** Begin Patch / *** End Patch format');
+  const pending:PendingFile[]=[];
+  let index=1;
+  while(index<lines.length-1){
+    const header=lines[index++];
+    const match=/^\*\*\* (Update|Add|Delete) File: (.+)$/.exec(header);
+    if(!match)throw new Error(`Expected file operation, received: ${header}`);
+    const operation=match[1];const relativePath=match[2];const absolutePath=safePath(root,relativePath);
+    const section:string[]=[];
+    while(index<lines.length-1&&!lines[index].startsWith('*** '))section.push(lines[index++]);
+    if(operation==='Delete'){await readFile(absolutePath);pending.push({path:absolutePath,content:null});continue;}
+    if(operation==='Add'){
+      if(section.some(line=>line&&!line.startsWith('+')))throw new Error(`Added file lines must start with +: ${relativePath}`);
+      pending.push({path:absolutePath,content:section.map(line=>line.startsWith('+')?line.slice(1):line).join('\n')});continue;
+    }
+    let content=await readFile(absolutePath,'utf8');
+    const hunks:Array<string[]>=[];let hunk:string[]|null=null;
+    for(const line of section){if(line.startsWith('@@')){if(hunk)hunks.push(hunk);hunk=[];}else if(hunk)hunk.push(line);else if(line.trim())throw new Error(`Update hunk missing @@ marker: ${relativePath}`);}
+    if(hunk)hunks.push(hunk);
+    if(!hunks.length)throw new Error(`No update hunks supplied: ${relativePath}`);
+    for(const lines of hunks){
+      const oldText=lines.filter(line=>line.startsWith(' ')||line.startsWith('-')).map(line=>line.slice(1)).join('\n');
+      const newText=lines.filter(line=>line.startsWith(' ')||line.startsWith('+')).map(line=>line.slice(1)).join('\n');
+      if(!oldText)throw new Error(`Update hunk has no context or removed lines: ${relativePath}`);
+      const first=content.indexOf(oldText);
+      if(first<0)throw new Error(`Update hunk did not match ${relativePath}`);
+      if(content.indexOf(oldText,first+1)>=0)throw new Error(`Update hunk matched multiple locations in ${relativePath}`);
+      content=content.slice(0,first)+newText+content.slice(first+oldText.length);
+    }
+    pending.push({path:absolutePath,content});
+  }
+  for(const file of pending){if(file.content===null)await rm(file.path);else{await mkdir(path.dirname(file.path),{recursive:true});await writeFile(file.path,file.content);}}
+  return pending.map(file=>path.relative(root,file.path));
+}
+
 export default function registerNazareTools(pi: ToolRegistrar) {
   pi.registerTool({
     name:'apply_patch',
     label:'Apply Patch',
-    description:'Apply a valid unified diff to one or more repository files. Use this instead of invoking an apply_patch shell command or embedding diff markers in edit replacement text.',
-    promptSnippet:'Use apply_patch for coordinated or multi-file edits; pass only a valid unified diff in patch',
-    parameters:Type.Object({patch:Type.String({description:'Valid unified diff, including --- and +++ file headers and @@ hunks'})}),
+    description:'Apply the model-native *** Begin Patch format to one or more repository files. Supports *** Update File, *** Add File, and *** Delete File sections with @@ update hunks.',
+    promptSnippet:'Use apply_patch for coordinated or multi-file edits; use *** Begin Patch, file-operation headers, @@ hunks, then *** End Patch',
+    parameters:Type.Object({patch:Type.String({description:'Patch using *** Begin Patch, *** Update/Add/Delete File headers, @@ hunks, and *** End Patch'})}),
     async execute(_toolCallId:string,params:{patch:string}){
       if(Buffer.byteLength(params.patch)>100_000)throw new Error('Patch exceeds 100000 bytes');
-      const check=spawnSync('git',['apply','--check','--whitespace=nowarn','-'],{cwd:process.cwd(),input:params.patch,encoding:'utf8'});
-      if(check.status!==0)return {content:[{type:'text' as const,text:`Patch rejected: ${check.stderr||check.stdout||`git apply --check exited ${check.status}`}`}],details:{applied:false,error:check.stderr||check.stdout},isError:true};
-      const applied=spawnSync('git',['apply','--whitespace=nowarn','-'],{cwd:process.cwd(),input:params.patch,encoding:'utf8'});
-      if(applied.status!==0)return {content:[{type:'text' as const,text:`Patch failed: ${applied.stderr||applied.stdout||`git apply exited ${applied.status}`}`}],details:{applied:false,error:applied.stderr||applied.stdout},isError:true};
-      return {content:[{type:'text' as const,text:'Patch applied successfully.'}],details:{applied:true}};
+      const files=await applyPatchText(process.cwd(),params.patch);
+      return {content:[{type:'text' as const,text:`Patch applied successfully to ${files.join(', ')}.`}],details:{applied:true,files}};
     },
   });
 

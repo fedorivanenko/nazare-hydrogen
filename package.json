@@ -8,7 +8,7 @@
 		"dev": "shopify hydrogen dev",
 		"build": "shopify hydrogen build",
 		"typecheck": "react-router typegen && tsc --noEmit",
-		"test": "tsx --test app/nazare/registry/index.test.ts",
+		"test": "tsx --test app/nazare/registry/index.test.ts .wind-tunnel/*.test.ts",
 		"lint:biome": "biome lint .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
 		"lint:experiments": "node scripts/lint-wind-tunnel-experiments.mjs",
