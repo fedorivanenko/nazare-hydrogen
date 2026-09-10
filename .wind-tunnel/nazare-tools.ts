@@ -17,6 +17,26 @@ function safePath(root:string,relativePath:string){
   return absolutePath;
 }
 
+function replaceHunk(content:string,oldText:string,newText:string,relativePath:string){
+  const first=content.indexOf(oldText);
+  if(first>=0){
+    if(content.indexOf(oldText,first+1)>=0)throw new Error(`Update hunk matched multiple locations in ${relativePath}`);
+    return content.slice(0,first)+newText+content.slice(first+oldText.length);
+  }
+  const contentLines=content.split('\n');const oldLines=oldText.split('\n');const newLines=newText.split('\n');
+  const candidates=[];
+  for(let index=0;index<=contentLines.length-oldLines.length;index++)if(oldLines.every((line,offset)=>contentLines[index+offset].trim()===line.trim()))candidates.push(index);
+  if(candidates.length!==1)throw new Error(`Update hunk did not match ${relativePath}`);
+  const index=candidates[0];const patchIndent=/^\s*/.exec(oldLines[0])?.[0]??'';const actualIndent=/^\s*/.exec(contentLines[index])?.[0]??'';const delta=actualIndent.length-patchIndent.length;
+  const adjusted=newLines.map(line=>{
+    if(!line.trim())return line;
+    if(delta>=0)return actualIndent.slice(0,delta)+line;
+    const indentation=/^\s*/.exec(line)?.[0]??'';return line.slice(Math.min(indentation.length,-delta));
+  });
+  contentLines.splice(index,oldLines.length,...adjusted);
+  return contentLines.join('\n');
+}
+
 export async function applyPatchText(root:string,patchText:string){
   const lines=patchText.replace(/\r\n/g,'\n').trimEnd().split('\n');
   if(lines[0]!=='*** Begin Patch'||lines.at(-1)!=='*** End Patch')throw new Error('Patch must use *** Begin Patch / *** End Patch format');
@@ -43,10 +63,7 @@ export async function applyPatchText(root:string,patchText:string){
       const oldText=lines.filter(line=>line.startsWith(' ')||line.startsWith('-')).map(line=>line.slice(1)).join('\n');
       const newText=lines.filter(line=>line.startsWith(' ')||line.startsWith('+')).map(line=>line.slice(1)).join('\n');
       if(!oldText)throw new Error(`Update hunk has no context or removed lines: ${relativePath}`);
-      const first=content.indexOf(oldText);
-      if(first<0)throw new Error(`Update hunk did not match ${relativePath}`);
-      if(content.indexOf(oldText,first+1)>=0)throw new Error(`Update hunk matched multiple locations in ${relativePath}`);
-      content=content.slice(0,first)+newText+content.slice(first+oldText.length);
+      content=replaceHunk(content,oldText,newText,relativePath);
     }
     pending.push({path:absolutePath,content});
   }

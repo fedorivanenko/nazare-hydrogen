@@ -16,6 +16,16 @@ test('applies model-native update patches',async()=>{
   }finally{await rm(root,{recursive:true,force:true});}
 });
 
+test('applies a uniquely matching hunk with shifted indentation',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'nazare-patch-'));
+  const file=path.join(root,'example.txt');
+  await writeFile(file,'section: [\n\t{\n\t\tname: "old",\n\t}\n]\n');
+  try{
+    await applyPatchText(root,'*** Begin Patch\n*** Update File: example.txt\n@@\n\tsection: [\n\t\t{\n-\t\t\tname: "old",\n+\t\t\tname: "new",\n\t\t}\n\t]\n*** End Patch');
+    assert.equal(await readFile(file,'utf8'),'section: [\n\t{\n\t\tname: "new",\n\t}\n]\n');
+  }finally{await rm(root,{recursive:true,force:true});}
+});
+
 test('rejects paths outside repository',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'nazare-patch-'));
   try{await assert.rejects(()=>applyPatchText(root,'*** Begin Patch\n*** Add File: ../escape.txt\n+no\n*** End Patch'),/escapes repository/);}
