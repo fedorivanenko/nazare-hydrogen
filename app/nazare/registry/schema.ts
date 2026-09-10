@@ -11,6 +11,7 @@ export type RegistryEntityBase<
 	kind: TKind;
 	intent: string;
 	keywords?: readonly string[];
+	/** Files useful for understanding this entity. Readable context, not write permission. */
 	sourceFiles: readonly string[];
 };
 
@@ -60,6 +61,8 @@ export type CapabilityDefinition = RegistryEntityBase<
 	policies: readonly CapabilityPolicy[];
 	evidence: readonly CapabilityEvidence[];
 	bindings: readonly CapabilityBinding[];
+	/** Explicit files the operator/agent may mutate for this capability. */
+	mutationFiles: readonly string[];
 };
 
 export type CarcassDefinition = RegistryEntityBase<"carcass", CarcassId> & {
