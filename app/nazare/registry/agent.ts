@@ -83,8 +83,23 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 		};
 	}
 
+	const mutationTargets = (capability.mutationTargets ?? []).map((target) => ({
+		file: target.file,
+		symbols: Array.from(new Set(target.symbols)).sort(),
+	}));
+	const invalidMutationTargets = mutationTargets.filter(
+		(target) => !mutationFiles.includes(target.file) || target.symbols.length === 0,
+	);
+	if (invalidMutationTargets.length) {
+		return {
+			ok: false as const,
+			error: `Capability ${id} declares invalid mutation targets: ${invalidMutationTargets.map((target) => target.file).join(", ")}`,
+		};
+	}
+
 	const mutationSet = {
 		files: mutationFiles,
+		targets: mutationTargets,
 		protectedFiles: [
 			".wind-tunnel",
 			"experiments",
