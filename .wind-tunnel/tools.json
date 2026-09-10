@@ -2,6 +2,20 @@
 	"version": 1,
 	"tools": [
 		{
+			"name": "apply_patch",
+			"description": "Apply a model-native multi-file patch with repository-boundary and symbolic-link protection.",
+			"entrypoint": ".wind-tunnel/tools/nazare.ts",
+			"operation": "apply_patch",
+			"timeoutMs": 3000,
+			"maxOutputBytes": 24000,
+			"parameters": {
+				"patch": {
+					"type": "string",
+					"description": "Patch using *** Begin Patch, *** Update/Add/Delete File headers, @@ hunks, and *** End Patch"
+				}
+			}
+		},
+		{
 			"name": "nazare_find",
 			"description": "Search the compiled Nazare architecture registry for capabilities, surfaces, providers, and source boundaries.",
 			"entrypoint": ".wind-tunnel/tools/nazare.ts",

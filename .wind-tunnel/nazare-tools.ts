@@ -27,9 +27,10 @@ type NazareOperationInput = {
 	expand?: boolean;
 	capabilityId?: string;
 	requestedChange?: string;
+	patch?: string;
 };
 
-export function executeNazareOperation(
+export async function executeNazareOperation(
 	operation: string,
 	input: NazareOperationInput,
 ) {
@@ -47,6 +48,15 @@ export function executeNazareOperation(
 			String(input.capabilityId ?? ""),
 			String(input.requestedChange ?? ""),
 		);
+	if (operation === "apply_patch") {
+		const patch = String(input.patch ?? "");
+		if (Buffer.byteLength(patch) > 100_000)
+			throw new Error("Patch exceeds 100000 bytes");
+		return {
+			applied: true,
+			files: await applyPatchText(process.cwd(), patch),
+		};
+	}
 	throw new Error(`Unknown Nazare operation: ${operation}`);
 }
 
