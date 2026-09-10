@@ -55,7 +55,7 @@ test("capability declares the executable route binding", () => {
 	);
 });
 
-test("task compiler projects the executable neighborhood and invariants", () => {
+test("task compiler separates readable context from writable files", () => {
 	const compiled = compileCapabilityTask(
 		"capability.collect-email-subscribers",
 		"Require explicit marketing consent before newsletter signup",
@@ -63,12 +63,11 @@ test("task compiler projects the executable neighborhood and invariants", () => 
 	assert.equal(compiled.ok, true);
 	if (!compiled.ok) return;
 
-	assert.ok(compiled.sourceFiles.includes("app/root.tsx"));
-	assert.deepEqual(compiled.mutationSet.files, [...compiled.sourceFiles].sort());
+	assert.ok(compiled.readSet.files.includes("app/nazare/registry/definitions.ts"));
+	assert.ok(!compiled.mutationSet.files.includes("app/nazare/registry/definitions.ts"));
 	assert.ok(compiled.mutationSet.files.includes("app/root.tsx"));
-	assert.deepEqual(
-		compiled.mutationSet.protectedFiles,
-		[".wind-tunnel", "experiments", ".github"],
+	assert.ok(
+		compiled.mutationSet.protectedFiles.includes("app/nazare/registry"),
 	);
 	assert.deepEqual(
 		compiled.executableBindings.map((binding) => binding.id),

@@ -72,21 +72,44 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 			...capability.bindings.map((binding) => binding.sourceFile),
 		]),
 	).sort();
+	const mutationFiles = Array.from(new Set(capability.mutationFiles)).sort();
+	const unknownMutationFiles = mutationFiles.filter(
+		(file) => !sourceFiles.includes(file),
+	);
+	if (unknownMutationFiles.length) {
+		return {
+			ok: false as const,
+			error: `Capability ${id} declares mutation files outside its readable source closure: ${unknownMutationFiles.join(", ")}`,
+		};
+	}
 
 	const mutationSet = {
-		files: sourceFiles,
+		files: mutationFiles,
 		protectedFiles: [
 			".wind-tunnel",
 			"experiments",
 			".github",
+			"app/nazare/registry",
 		] as const,
 	};
 
 	const verificationPlan = [
-		{ tier: "structural" as const, intent: "Preserve declared capability policies and evidence contracts." },
-		{ tier: "focused" as const, intent: "Run Nazare registry and capability-specific tests." },
-		{ tier: "behavioral" as const, intent: "Run the experiment behavioral oracle." },
-		{ tier: "full" as const, intent: "Run typecheck and production build." },
+		{
+			tier: "structural" as const,
+			intent: "Preserve declared capability policies and evidence contracts.",
+		},
+		{
+			tier: "focused" as const,
+			intent: "Run Nazare registry and capability-specific tests.",
+		},
+		{
+			tier: "behavioral" as const,
+			intent: "Run the experiment behavioral oracle.",
+		},
+		{
+			tier: "full" as const,
+			intent: "Run typecheck and production build.",
+		},
 	];
 
 	return {
@@ -96,6 +119,7 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 			id: capability.id,
 			intent: capability.intent,
 		},
+		readSet: { files: sourceFiles },
 		sourceFiles,
 		mutationSet,
 		executableBindings: capability.bindings,
@@ -104,7 +128,8 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 			requiredEvidence: capability.evidence,
 			surfaces: surfaces.map((surface) => ({
 				id: surface?.id,
-				constraints: surface?.kind === "carcass" ? surface.constraints ?? [] : [],
+				constraints:
+					surface?.kind === "carcass" ? surface.constraints ?? [] : [],
 			})),
 			providers: providers.map(({ ref, entity }) => ({
 				id: ref.id,
