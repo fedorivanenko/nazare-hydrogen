@@ -1,4 +1,4 @@
-name: Run Wind Tunnel
+name: Run eve Wind Tunnel
 
 on:
   workflow_dispatch:
@@ -35,190 +35,103 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
           sha=$(jq -r '.head.sha' <<<"$response")
           repo=$(jq -r '.head.repo.full_name' <<<"$response")
-          if [[ "$repo" != "$GITHUB_REPOSITORY" ]]; then
-            echo "Wind Tunnel runs are currently restricted to same-repository PR branches." >&2
-            exit 1
-          fi
-          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Could not resolve an exact PR head SHA." >&2
-            exit 1
-          fi
+          test "$repo" = "$GITHUB_REPOSITORY"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact subject snapshot
+      - name: Checkout exact source snapshot
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.pr.outputs.sha }}
 
-      - name: Lint experiment configuration
+      - name: Validate and archive source
         env:
           EXPERIMENT: ${{ inputs.experiment }}
-        run: node scripts/lint-wind-tunnel-experiments.mjs "$EXPERIMENT"
+        run: |
+          set -euo pipefail
+          node scripts/lint-wind-tunnel-experiments.mjs "$EXPERIMENT"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/source.tar.gz" HEAD
 
-      - name: Start Wind Tunnel run
-        id: start
+      - name: Run isolated eve agent
+        id: eve
         env:
-          WIND_TUNNEL_URL: ${{ vars.WIND_TUNNEL_URL }}
-          WIND_TUNNEL_TOKEN: ${{ secrets.WIND_TUNNEL_TOKEN }}
+          EVE_URL: ${{ vars.EVE_WIND_TUNNEL_URL }}
+          EVE_TOKEN: ${{ secrets.WIND_TUNNEL_TOKEN }}
           SUBJECT_REPO: ${{ steps.pr.outputs.repo }}
           SUBJECT_SHA: ${{ steps.pr.outputs.sha }}
           EXPERIMENT: ${{ inputs.experiment }}
         run: |
           set -euo pipefail
-          test -n "$WIND_TUNNEL_URL"
-          test -n "$WIND_TUNNEL_TOKEN"
-          body=$(jq -nc \
+          test -n "$EVE_URL"
+          test -n "$EVE_TOKEN"
+          archive=$(base64 -w 0 "$RUNNER_TEMP/source.tar.gz")
+          message="Implement Wind Tunnel experiment $EXPERIMENT for $SUBJECT_REPO at exact source SHA $SUBJECT_SHA. First call prepare_subject with this experiment path. After implementation call finish_run."
+          jq -nc \
+            --arg message "$message" \
+            --arg archive "$archive" \
+            --arg operationId "$GITHUB_REPOSITORY:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT" \
             --arg repository "$SUBJECT_REPO" \
             --arg sourceSha "$SUBJECT_SHA" \
             --arg experiment "$EXPERIMENT" \
-            '{repository:$repository,sourceSha:$sourceSha,experiment:$experiment}')
-          response_file="$RUNNER_TEMP/wind-tunnel-start.json"
-          http_code=$(curl --silent --show-error \
-            -o "$response_file" -w '%{http_code}' \
-            -X POST \
-            -H "Authorization: Bearer $WIND_TUNNEL_TOKEN" \
-            -H "Content-Type: application/json" \
-            "$WIND_TUNNEL_URL/runs" \
-            --data "$body")
-          response=$(cat "$response_file")
-          if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
-            message=$(jq -r '.error // .' <<<"$response" 2>/dev/null || printf '%s' "$response")
-            echo "::error title=Wind Tunnel start failed::HTTP $http_code: $message"
-            printf '%s\n' "$response" >&2
-            exit 1
-          fi
-          run_id=$(jq -r '.runId' <<<"$response")
-          test -n "$run_id"
-          test "$run_id" != "null"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "Started Wind Tunnel run $run_id"
-
-      - name: Wait for result
-        id: result
-        env:
-          WIND_TUNNEL_URL: ${{ vars.WIND_TUNNEL_URL }}
-          WIND_TUNNEL_TOKEN: ${{ secrets.WIND_TUNNEL_TOKEN }}
-          RUN_ID: ${{ steps.start.outputs.run_id }}
-        run: |
-          set -euo pipefail
-          remote_done=0
-          cancel_remote() {
-            if [[ "$remote_done" != "1" && -n "${RUN_ID:-}" ]]; then
-              echo "Cancelling remote Wind Tunnel run $RUN_ID"
-              curl --silent --show-error --fail \
-                -X POST \
-                -H "Authorization: Bearer $WIND_TUNNEL_TOKEN" \
-                "$WIND_TUNNEL_URL/runs/$RUN_ID/cancel" >/dev/null || true
-            fi
-          }
-          trap cancel_remote EXIT INT TERM
-
-          for attempt in $(seq 1 450); do
-            response=$(curl --fail --silent --show-error \
-              -H "Authorization: Bearer $WIND_TUNNEL_TOKEN" \
-              "$WIND_TUNNEL_URL/runs/$RUN_ID")
-            status=$(jq -r '.status' <<<"$response")
-            outcome=$(jq -r '.outcome // ""' <<<"$response")
-            elapsed=$(jq -r '.elapsedMs // 0' <<<"$response")
-            error_code=$(jq -r '.errorCode // ""' <<<"$response")
-            error=$(jq -r '.error // ""' <<<"$response")
-            echo "[$attempt] status=$status outcome=${outcome:-pending} elapsedMs=$elapsed errorCode=${error_code:-none}"
-
-            case "$status" in
-              completed|failed|cancelled)
-                remote_done=1
-                echo "status=$status" >> "$GITHUB_OUTPUT"
-                echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
-                echo "elapsed_ms=$elapsed" >> "$GITHUB_OUTPUT"
-                echo "error_code=$error_code" >> "$GITHUB_OUTPUT"
-                {
-                  echo 'error<<EOF'
-                  echo "$error"
-                  echo 'EOF'
-                } >> "$GITHUB_OUTPUT"
-                echo "$response" > "$RUNNER_TEMP/wind-tunnel-result.json"
-
-                events=$(curl --silent --show-error --fail \
-                  -H "Authorization: Bearer $WIND_TUNNEL_TOKEN" \
-                  "$WIND_TUNNEL_URL/runs/$RUN_ID/events?limit=500" || echo '{"events":[]}')
-                jq -r '.events[-20:][] | "\(.at)  \(.type)  \(.data // {})"' <<<"$events" > "$RUNNER_TEMP/wind-tunnel-events.txt" || true
-
-                if [[ "$status" != "completed" || "$outcome" != "pass" ]]; then
-                  headline=${error_code:-wind_tunnel_failed}
-                  detail=$(printf '%s' "${error:-status=$status outcome=${outcome:-none}}" | tr '\n' ' ' | head -c 900)
-                  echo "::error title=Wind Tunnel $headline::$detail"
-                  if [[ -s "$RUNNER_TEMP/wind-tunnel-events.txt" ]]; then
-                    echo "Last Wind Tunnel events:" >&2
-                    cat "$RUNNER_TEMP/wind-tunnel-events.txt" >&2
-                  fi
-                fi
-                break
-                ;;
-            esac
-            sleep 2
+            '{operationId:$operationId,message:[{type:"text",text:$message},{type:"file",data:("data:application/gzip;base64,"+$archive),mediaType:"application/gzip",filename:"source.tar.gz"}],clientContext:{repository:$repository,sourceSha:$sourceSha,experiment:$experiment,runtime:"eve@0.52.5",sandbox:"vercel"}}' \
+            > "$RUNNER_TEMP/eve-request.json"
+          response=$(curl --fail --silent --show-error \
+            -X POST -H "Authorization: Bearer $EVE_TOKEN" -H "Content-Type: application/json" \
+            "$EVE_URL/eve/v1/session" --data-binary @"$RUNNER_TEMP/eve-request.json")
+          session_id=$(jq -r '.sessionId' <<<"$response")
+          [[ "$session_id" == wrun_* ]]
+          echo "session_id=$session_id" >> "$GITHUB_OUTPUT"
+          stream="$RUNNER_TEMP/eve-events.ndjson"
+          for attempt in $(seq 1 8); do
+            code=$(curl --silent --show-error -o "$stream" -w '%{http_code}' \
+              -H "Authorization: Bearer $EVE_TOKEN" "$EVE_URL/eve/v1/session/$session_id/stream")
+            [[ "$code" = 200 ]] && break
+            sleep 1
           done
-
-          if [[ ! -f "$RUNNER_TEMP/wind-tunnel-result.json" ]]; then
-            echo "::error title=Wind Tunnel polling timeout::Remote run $RUN_ID did not finish in the GitHub Actions polling window"
-            echo "Wind Tunnel run did not finish within the workflow polling window." >&2
+          [[ "${code:-}" = 200 ]]
+          jq -c 'if .type=="message.received" then .data.parts |= map(if .type=="file" then .url="[inline attachment redacted]" else . end) else . end' "$stream" > "$stream.redacted"
+          mv "$stream.redacted" "$stream"
+          if grep -Eq '"type":"(turn|session)\.failed"' "$stream"; then
+            echo "eve turn failed" >&2
+            tail -20 "$stream" >&2
             exit 1
           fi
+          finish=$(grep '"type":"action.result"' "$stream" | jq -sc '[.[] | select(.data.result.toolName=="finish_run" and (.data.result.isError // false | not))] | last')
+          test "$finish" != "null"
+          passed=$(jq -r '.data.result.output.passed' <<<"$finish")
+          changed=$(jq -c '.data.result.output.changedFiles' <<<"$finish")
+          message=$(grep '"type":"message.completed"' "$stream" | jq -sr 'last.data.message // ""')
+          jq -n --arg sessionId "$session_id" --argjson passed "$passed" --argjson changedFiles "$changed" --arg message "$message" \
+            '{sessionId:$sessionId,passed:$passed,changedFiles:$changedFiles,message:$message}' > "$RUNNER_TEMP/eve-result.json"
+          cat "$RUNNER_TEMP/eve-result.json"
+          test "$passed" = true
 
       - name: Publish summary
-        if: always() && steps.start.outputs.run_id != ''
+        if: always() && steps.eve.outputs.session_id != ''
         env:
-          WIND_TUNNEL_URL: ${{ vars.WIND_TUNNEL_URL }}
-          RUN_ID: ${{ steps.start.outputs.run_id }}
-          SHA: ${{ steps.pr.outputs.sha }}
+          SESSION_ID: ${{ steps.eve.outputs.session_id }}
+          EVE_URL: ${{ vars.EVE_WIND_TUNNEL_URL }}
           EXPERIMENT: ${{ inputs.experiment }}
-          STATUS: ${{ steps.result.outputs.status }}
-          OUTCOME: ${{ steps.result.outputs.outcome }}
-          ELAPSED_MS: ${{ steps.result.outputs.elapsed_ms }}
-          ERROR_CODE: ${{ steps.result.outputs.error_code }}
-          ERROR: ${{ steps.result.outputs.error }}
+          SHA: ${{ steps.pr.outputs.sha }}
         run: |
           {
-            echo "## Wind Tunnel"
+            echo "## eve Wind Tunnel"
             echo
-            echo "| Field | Value |"
-            echo "| --- | --- |"
-            echo "| Run | \`$RUN_ID\` |"
-            echo "| PR | #${{ inputs.pr }} |"
-            echo "| SHA | \`$SHA\` |"
-            echo "| Experiment | \`$EXPERIMENT\` |"
-            echo "| Status | ${STATUS:-unknown} |"
-            echo "| Outcome | ${OUTCOME:-pending} |"
-            echo "| Elapsed | ${ELAPSED_MS:-0} ms |"
-            echo "| Error code | ${ERROR_CODE:-none} |"
-            if [[ -n "${ERROR:-}" ]]; then
-              echo
-              echo "### Error"
-              echo '```text'
-              printf '%s\n' "$ERROR" | head -c 4000
-              echo
-              echo '```'
-            fi
-            if [[ -s "$RUNNER_TEMP/wind-tunnel-events.txt" ]]; then
-              echo
-              echo "### Last events"
-              echo '```text'
-              cat "$RUNNER_TEMP/wind-tunnel-events.txt"
-              echo '```'
-            fi
+            echo "- Session: \`$SESSION_ID\`"
+            echo "- Source: \`$SHA\`"
+            echo "- Experiment: \`$EXPERIMENT\`"
+            echo "- Runtime: eve 0.52.5 + Vercel Workflow + Vercel Sandbox"
+            echo "- Endpoint: $EVE_URL"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Enforce verdict
-        if: steps.result.outputs.status != ''
-        env:
-          STATUS: ${{ steps.result.outputs.status }}
-          OUTCOME: ${{ steps.result.outputs.outcome }}
-          ERROR_CODE: ${{ steps.result.outputs.error_code }}
-          ERROR: ${{ steps.result.outputs.error }}
-        run: |
-          if [[ "$STATUS" != "completed" || "$OUTCOME" != "pass" ]]; then
-            echo "Wind Tunnel FAILED: status=$STATUS outcome=${OUTCOME:-none} errorCode=${ERROR_CODE:-none}" >&2
-            if [[ -n "${ERROR:-}" ]]; then printf '%s\n' "$ERROR" >&2; fi
-            exit 1
-          fi
-          echo "Wind Tunnel PASS"
+      - name: Upload eve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eve-wind-tunnel-${{ steps.eve.outputs.session_id || github.run_id }}
+          path: |
+            ${{ runner.temp }}/eve-result.json
+            ${{ runner.temp }}/eve-events.ndjson
+          if-no-files-found: warn
+          retention-days: 30
