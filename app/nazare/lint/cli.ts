@@ -28,7 +28,11 @@ async function lintRegistry() {
 
 	for (const entity of entities) {
 		if (seen.has(entity.id)) {
-			diagnostics.push({ level: "error", entity: entity.id, message: "Duplicate registry entity id" });
+			diagnostics.push({
+				level: "error",
+				entity: entity.id,
+				message: "Duplicate registry entity id",
+			});
 		}
 		seen.add(entity.id);
 
@@ -36,7 +40,11 @@ async function lintRegistry() {
 			try {
 				await access(resolve(process.cwd(), sourceFile));
 			} catch {
-				diagnostics.push({ level: "error", entity: entity.id, message: `Missing source file: ${sourceFile}` });
+				diagnostics.push({
+					level: "error",
+					entity: entity.id,
+					message: `Missing source file: ${sourceFile}`,
+				});
 			}
 		}
 
@@ -45,33 +53,60 @@ async function lintRegistry() {
 		for (const surfaceRef of entity.surfaces) {
 			const surface = getEntity(surfaceRef.id);
 			if (surface?.kind !== "carcass") {
-				diagnostics.push({ level: "error", entity: entity.id, message: `Unknown Carcass surface: ${surfaceRef.id}` });
+				diagnostics.push({
+					level: "error",
+					entity: entity.id,
+					message: `Unknown Carcass surface: ${surfaceRef.id}`,
+				});
 			}
 		}
 
 		for (const providerRef of entity.providers) {
 			const provider = getEntity(providerRef.id);
 			if (provider?.kind !== "provider") {
-				diagnostics.push({ level: "error", entity: entity.id, message: `Unknown provider: ${providerRef.id}` });
+				diagnostics.push({
+					level: "error",
+					entity: entity.id,
+					message: `Unknown provider: ${providerRef.id}`,
+				});
 				continue;
 			}
-			if (providerRef.action && !provider.actions.some((action) => action.id === providerRef.action)) {
-				diagnostics.push({ level: "error", entity: entity.id, message: `Unknown provider action: ${providerRef.id}.${providerRef.action}` });
+			if (
+				providerRef.action &&
+				!provider.actions.some((action) => action.id === providerRef.action)
+			) {
+				diagnostics.push({
+					level: "error",
+					entity: entity.id,
+					message: `Unknown provider action: ${providerRef.id}.${providerRef.action}`,
+				});
 			}
 		}
 
 		for (const binding of entity.bindings) {
 			const diagnosticEntity = `${entity.id}:${binding.id}`;
 			if (seenBindings.has(binding.id)) {
-				diagnostics.push({ level: "error", entity: diagnosticEntity, message: "Duplicate executable binding id" });
+				diagnostics.push({
+					level: "error",
+					entity: diagnosticEntity,
+					message: "Duplicate executable binding id",
+				});
 			}
 			seenBindings.add(binding.id);
 
 			if (!entity.surfaces.some((surface) => surface.id === binding.surface)) {
-				diagnostics.push({ level: "error", entity: diagnosticEntity, message: `Binding uses undeclared surface: ${binding.surface}` });
+				diagnostics.push({
+					level: "error",
+					entity: diagnosticEntity,
+					message: `Binding uses undeclared surface: ${binding.surface}`,
+				});
 			}
 			if (!entity.sourceFiles.includes(binding.sourceFile)) {
-				diagnostics.push({ level: "error", entity: diagnosticEntity, message: `Binding source is not projected by capability: ${binding.sourceFile}` });
+				diagnostics.push({
+					level: "error",
+					entity: diagnosticEntity,
+					message: `Binding source is not projected by capability: ${binding.sourceFile}`,
+				});
 			}
 
 			try {
@@ -79,20 +114,34 @@ async function lintRegistry() {
 				const markers = [
 					["handler", binding.handler],
 					["invocation", binding.invocation],
-					...binding.inputs.map((input) => [`input ${input.name}`, input.evidence] as const),
+					...binding.inputs.map(
+						(input) => [`input ${input.name}`, input.evidence] as const,
+					),
 				] as const;
 				for (const [label, marker] of markers) {
 					if (!contents.includes(marker)) {
-						diagnostics.push({ level: "error", entity: diagnosticEntity, message: `Binding ${label} marker not found in ${binding.sourceFile}: ${marker}` });
+						diagnostics.push({
+							level: "error",
+							entity: diagnosticEntity,
+							message: `Binding ${label} marker not found in ${binding.sourceFile}: ${marker}`,
+						});
 					}
 				}
 			} catch {
-				diagnostics.push({ level: "error", entity: diagnosticEntity, message: `Cannot inspect binding source: ${binding.sourceFile}` });
+				diagnostics.push({
+					level: "error",
+					entity: diagnosticEntity,
+					message: `Cannot inspect binding source: ${binding.sourceFile}`,
+				});
 			}
 		}
 
 		if (entity.evidence.length === 0) {
-			diagnostics.push({ level: "warning", entity: entity.id, message: "Capability has no declared evidence" });
+			diagnostics.push({
+				level: "warning",
+				entity: entity.id,
+				message: "Capability has no declared evidence",
+			});
 		}
 	}
 

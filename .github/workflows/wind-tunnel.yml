@@ -97,10 +97,10 @@ jobs:
           done
           jq -c '.events[] | if .type=="message.received" then .data.parts |= map(if .type=="file" then .url="[inline attachment redacted]" else . end) else . end' "$detail" > "$RUNNER_TEMP/eve-events.ndjson"
           [[ "$status" = completed ]]
-          finish=$(jq -c '[.events[] | select(.type=="action.result" and .data.result.toolName=="finish_run" and (.data.result.isError // false | not))] | last' "$detail")
-          test "$finish" != "null"
-          passed=$(jq -r '.data.result.output.passed' <<<"$finish")
-          changed=$(jq -c '.data.result.output.changedFiles' <<<"$finish")
+          result=$(jq -c '.run.result' "$detail")
+          test "$result" != "null"
+          passed=$(jq -r '.passed' <<<"$result")
+          changed=$(jq -c '.changedFiles' <<<"$result")
           message=$(jq -r '[.events[] | select(.type=="message.completed")] | last.data.message // ""' "$detail")
           jq -n --arg sessionId "$session_id" --argjson passed "$passed" --argjson changedFiles "$changed" --arg message "$message" \
             '{sessionId:$sessionId,passed:$passed,changedFiles:$changedFiles,message:$message}' > "$RUNNER_TEMP/eve-result.json"

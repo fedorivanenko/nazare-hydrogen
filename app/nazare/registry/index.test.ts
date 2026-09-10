@@ -39,7 +39,7 @@ test("entity expansion follows exact graph references", () => {
 	);
 	assert.deepEqual(
 		capability && "bindings" in capability
-			? capability.bindings?.map((binding) => binding.id) ?? []
+			? (capability.bindings?.map((binding) => binding.id) ?? [])
 			: [],
 		["binding.route.root.hero-email-signup"],
 	);
@@ -63,8 +63,12 @@ test("task compiler separates readable context from writable files", () => {
 	assert.equal(compiled.ok, true);
 	if (!compiled.ok) return;
 
-	assert.ok(compiled.readSet.files.includes("app/nazare/registry/definitions.ts"));
-	assert.ok(!compiled.mutationSet.files.includes("app/nazare/registry/definitions.ts"));
+	assert.ok(
+		compiled.readSet.files.includes("app/nazare/registry/definitions.ts"),
+	);
+	assert.ok(
+		!compiled.mutationSet.files.includes("app/nazare/registry/definitions.ts"),
+	);
 	assert.ok(compiled.mutationSet.files.includes("app/root.tsx"));
 	assert.ok(
 		compiled.mutationSet.protectedFiles.includes("app/nazare/registry"),

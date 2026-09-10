@@ -58,7 +58,9 @@ async function resolveMutationRanges() {
 		for (const statement of source.statements) {
 			const directName = topLevelSymbolName(statement);
 			if (directName && wanted.has(directName)) {
-				const start = source.getLineAndCharacterOfPosition(statement.getStart(source));
+				const start = source.getLineAndCharacterOfPosition(
+					statement.getStart(source),
+				);
 				const end = source.getLineAndCharacterOfPosition(statement.getEnd());
 				ranges.push({
 					file: target.file,
@@ -73,7 +75,9 @@ async function resolveMutationRanges() {
 			for (const declaration of statement.declarationList.declarations) {
 				if (!ts.isIdentifier(declaration.name)) continue;
 				if (!wanted.has(declaration.name.text)) continue;
-				const start = source.getLineAndCharacterOfPosition(statement.getStart(source));
+				const start = source.getLineAndCharacterOfPosition(
+					statement.getStart(source),
+				);
 				const end = source.getLineAndCharacterOfPosition(statement.getEnd());
 				ranges.push({
 					file: target.file,

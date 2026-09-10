@@ -37,7 +37,9 @@ switch (command) {
 		const [id, ...changeParts] = args;
 		const requestedChange = changeParts.join(" ");
 		if (!id || !requestedChange) {
-			throw new Error(`Usage: nazare:registry ${command} <capability-id> <requested-change>`);
+			throw new Error(
+				`Usage: nazare:registry ${command} <capability-id> <requested-change>`,
+			);
 		}
 		print(
 			command === "compile"
@@ -47,5 +49,7 @@ switch (command) {
 		break;
 	}
 	default:
-		throw new Error("Usage: nazare:registry <find|inspect|expand|plan|compile> ...");
+		throw new Error(
+			"Usage: nazare:registry <find|inspect|expand|plan|compile> ...",
+		);
 }

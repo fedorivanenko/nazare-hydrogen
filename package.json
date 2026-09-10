@@ -14,7 +14,8 @@
 		"lint:experiments": "node scripts/lint-wind-tunnel-experiments.mjs",
 		"lint:subject": "node scripts/lint-subject-contract.mjs",
 		"subject:compile": "WIND_TUNNEL_SUBJECT_OUTPUT=/tmp/nazare-wind-tunnel-subject.json tsx .wind-tunnel/compile-subject.ts",
-		"subject:check": "pnpm lint:subject && pnpm subject:compile",
+		"test:subject": "node scripts/test-prepared-subject.mjs",
+		"subject:check": "pnpm lint:subject && pnpm test:subject && pnpm subject:compile",
 		"lint": "pnpm run lint:biome && pnpm run lint:nazare && pnpm run lint:experiments && pnpm run lint:subject",
 		"nazare:registry": "tsx app/nazare/registry/cli.ts"
 	},

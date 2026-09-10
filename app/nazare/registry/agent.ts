@@ -88,7 +88,8 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 		symbols: Array.from(new Set(target.symbols)).sort(),
 	}));
 	const invalidMutationTargets = mutationTargets.filter(
-		(target) => !mutationFiles.includes(target.file) || target.symbols.length === 0,
+		(target) =>
+			!mutationFiles.includes(target.file) || target.symbols.length === 0,
 	);
 	if (invalidMutationTargets.length) {
 		return {
@@ -144,7 +145,7 @@ export function compileCapabilityTask(id: string, requestedChange: string) {
 			surfaces: surfaces.map((surface) => ({
 				id: surface?.id,
 				constraints:
-					surface?.kind === "carcass" ? surface.constraints ?? [] : [],
+					surface?.kind === "carcass" ? (surface.constraints ?? []) : [],
 			})),
 			providers: providers.map(({ ref, entity }) => ({
 				id: ref.id,
