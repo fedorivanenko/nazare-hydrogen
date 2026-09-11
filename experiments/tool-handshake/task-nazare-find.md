@@ -1,1 +1,0 @@
-Use the native `nazare_find` tool exactly once with query `marketing consent` and kind `capability`. Then respond with only the first capability ID. Do not emit tool-call syntax as text and do not use any other tool.

@@ -5,8 +5,6 @@ import {
 } from "./definitions";
 import type {
 	CapabilityDefinition,
-	CarcassDefinition,
-	ProviderDefinition,
 	RegistryEntity,
 	RegistryEntityKind,
 } from "./schema";
@@ -83,26 +81,9 @@ export function searchRegistry(query: string, kind?: RegistryEntityKind) {
 		.map(({ entity }) => entity);
 }
 
-// Compatibility helpers for capability-specific callers.
-export function listCapabilities() {
-	return listEntities("capability") as CapabilityDefinition[];
-}
-
 export function getCapability(id: string) {
 	const entity = getEntity(id);
 	return entity?.kind === "capability"
 		? (entity as CapabilityDefinition)
 		: null;
-}
-
-export function searchCapabilities(query: string) {
-	return searchRegistry(query, "capability") as CapabilityDefinition[];
-}
-
-export function listCarcass() {
-	return listEntities("carcass") as CarcassDefinition[];
-}
-
-export function listProviders() {
-	return listEntities("provider") as ProviderDefinition[];
 }

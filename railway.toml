@@ -1,8 +1,0 @@
-[build]
-builder = "RAILPACK"
-
-[deploy]
-startCommand = "npx tsx tools/wind-tunnel/bootstrap.ts"
-healthcheckPath = "/health"
-healthcheckTimeout = 30
-restartPolicyType = "ALWAYS"
