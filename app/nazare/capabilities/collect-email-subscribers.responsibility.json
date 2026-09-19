@@ -1,12 +1,13 @@
 {
 	"function": "collectEmailSubscribers",
-	"primaryResponsibility": "email.subscriber.create",
-	"description": "Collect an email subscriber",
+	"primaryResponsibility": "email.subscribers.collect",
+	"description": "Collect email subscribers by validating their email addresses and creating contacts in Resend.",
 	"mixed": false,
 	"evidence": [
-		"The file is named collect-email-subscribers.ts and imports collectEmailSubscribersDefinition.",
-		"An exported async method execute is owned by collectEmailSubscribers and validates an email before creating a Resend contact.",
-		"String literals include \"Enter a valid email address.\" and \"contact-created\", indicating the purpose is to add a subscriber.",
-		"The method returns evidence with type \"connector-result\" and connector \"provider.resend.contacts.create\", showing a subscriber creation action."
+		"source:collect-email-subscribers.ts",
+		"import:createResendContact,type ResendConnectorEnv from ../connectors/resend.server",
+		"function:collectEmailSubscribers.execute; kind:method; exported:true; async:true",
+		"call:collectEmailSubscribers.execute -> createResendContact",
+		"string:collectEmailSubscribers.execute -> \"provider.resend.contacts.create\""
 	]
 }

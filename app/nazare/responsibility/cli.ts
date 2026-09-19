@@ -7,7 +7,7 @@ import { inferResponsibility } from "./infer";
 
 const args = process.argv.slice(2);
 let input: string | undefined;
-let model = "openai/gpt-oss-120b";
+let model = "alibaba/qwen3-coder-30b-a3b";
 let dryRun = false;
 
 for (let index = 0; index < args.length; index += 1) {
