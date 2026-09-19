@@ -11,7 +11,8 @@
 		"test": "tsx --test app/nazare/registry/index.test.ts",
 		"lint:biome": "biome lint .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
-		"lint": "pnpm run lint:biome && pnpm run lint:nazare"
+		"lint": "pnpm run lint:biome && pnpm run lint:nazare",
+		"nazare:evidence": "tsx app/nazare/evidence/cli.ts"
 	},
 	"dependencies": {
 		"@shopify/hydrogen": "2026.4.5",
@@ -30,7 +31,8 @@
 		"@types/react-dom": "19.2.7",
 		"tsx": "^4.23.13",
 		"typescript": "5.9.3",
-		"vite": "8.2.2"
+		"vite": "8.2.2",
+		"ts-morph": "^27.0.0"
 	},
 	"engines": {
 		"node": "^24.0.0"
