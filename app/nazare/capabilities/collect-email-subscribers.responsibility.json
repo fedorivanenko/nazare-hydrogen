@@ -1,0 +1,18 @@
+{
+	"function": "collectEmailSubscribers",
+	"primaryResponsibility": "email.subscriber.create",
+	"description": "Collect an email subscriber using the Resend connector",
+	"confidence": 0.94,
+	"mixed": false,
+	"evidence": [
+		"/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/capabilities/collect-email-subscribers.ts",
+		"createResendContact",
+		"ResendConnectorEnv",
+		"collectEmailSubscribersDefinition",
+		"policyImplementations[\"valid-email\"]",
+		"\"Enter a valid email address.\"",
+		"\"connector-result\"",
+		"\"contact-created\"",
+		"\"provider.resend.contacts.create\""
+	]
+}

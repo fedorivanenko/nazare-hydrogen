@@ -1,0 +1,124 @@
+{
+	"schemaVersion": 1,
+	"sourceFile": "/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/capabilities/collect-email-subscribers.ts",
+	"imports": [
+		{
+			"module": "../connectors/resend.server",
+			"defaultImport": null,
+			"namespaceImport": null,
+			"namedImports": ["createResendContact", "type ResendConnectorEnv"]
+		},
+		{
+			"module": "../registry/definitions",
+			"defaultImport": null,
+			"namespaceImport": null,
+			"namedImports": ["collectEmailSubscribersDefinition"]
+		}
+	],
+	"reExports": [],
+	"functions": [
+		{
+			"name": "validateEmail",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 9,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "email",
+					"type": "string",
+					"optional": false
+				}
+			],
+			"returnType": "boolean",
+			"calls": [
+				{
+					"callee": "EMAIL_PATTERN.test",
+					"location": {
+						"line": 10,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": ["EMAIL_PATTERN.test"],
+			"stringLiterals": [],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "EMAIL_PATTERN.test(email)",
+					"location": {
+						"line": 10,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "execute",
+			"kind": "method",
+			"exported": false,
+			"async": true,
+			"location": {
+				"line": 24,
+				"column": 2
+			},
+			"parameters": [
+				{
+					"name": "email",
+					"type": "string",
+					"optional": false
+				},
+				{
+					"name": "env",
+					"type": "ResendConnectorEnv",
+					"optional": false
+				}
+			],
+			"returnType": "Promise<{ ok: false; error: string; evidence?: undefined; } | { ok: true; evidence: { type: string; connector: string; result: string; }; error?: undefined; }>",
+			"calls": [
+				{
+					"callee": "policyImplementations[\"valid-email\"]",
+					"location": {
+						"line": 25,
+						"column": 8
+					}
+				},
+				{
+					"callee": "createResendContact",
+					"location": {
+						"line": 29,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": [],
+			"stringLiterals": [
+				"Enter a valid email address.",
+				"connector-result",
+				"contact-created",
+				"provider.resend.contacts.create",
+				"valid-email"
+			],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "{ ok: false as const, error: \"Enter a valid email address.\" }",
+					"location": {
+						"line": 26,
+						"column": 4
+					}
+				},
+				{
+					"expression": "{\n\t\t\tok: true as const,\n\t\t\tevidence: {\n\t\t\t\ttype: \"connector-result\",\n\t\t\t\tconnector: \"provider.resend.contacts.create\",\n\t\t\t\tresult: \"contact-created\",\n\t\t\t},\n\t\t}",
+					"location": {
+						"line": 31,
+						"column": 3
+					}
+				}
+			]
+		}
+	]
+}

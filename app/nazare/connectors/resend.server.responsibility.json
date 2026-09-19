@@ -1,0 +1,19 @@
+{
+	"function": "createResendContact",
+	"primaryResponsibility": "resend.contact.create",
+	"description": "Create a Resend contact via API",
+	"confidence": 0.95,
+	"mixed": false,
+	"evidence": [
+		"function name: createResendContact",
+		"calls fetch",
+		"calls JSON.stringify",
+		"calls response.json",
+		"throws new Error(\"RESEND_API_KEY is not configured\")",
+		"throws new Error(`Resend contact creation failed: ${response.status} ${details}`)",
+		"returns response.json() as Promise<{ id: string }>",
+		"string literal \"https://api.resend.com/contacts\"",
+		"property access env.RESEND_API_KEY",
+		"property access response.ok"
+	]
+}
