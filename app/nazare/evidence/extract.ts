@@ -97,7 +97,7 @@ function isExported(node: FunctionLike): boolean {
 
 	const parent = node.getParent();
 	if (Node.isVariableDeclaration(parent)) {
-		const statement = parent.getVariableStatement();
+		const statement = parent.getFirstAncestorByKind(SyntaxKind.VariableStatement);
 		return statement?.isExported() ?? false;
 	}
 
@@ -176,7 +176,7 @@ export function extractFileEvidence(
 		project.addSourceFileAtPath(filePath);
 
 	const functionLikes: FunctionLike[] = [
-		...sourceFile.getFunctions(),
+		...sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration),
 		...sourceFile.getDescendantsOfKind(SyntaxKind.MethodDeclaration),
 		...sourceFile.getDescendantsOfKind(SyntaxKind.ArrowFunction),
 		...sourceFile.getDescendantsOfKind(SyntaxKind.FunctionExpression),
