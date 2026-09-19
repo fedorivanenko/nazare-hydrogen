@@ -1,12 +1,12 @@
 import {
-	Node,
-	Project,
-	SyntaxKind,
 	type ArrowFunction,
 	type FunctionDeclaration,
 	type FunctionExpression,
 	type MethodDeclaration,
+	Node,
+	Project,
 	type SourceFile,
+	SyntaxKind,
 } from "ts-morph";
 
 type FunctionLike =
@@ -27,6 +27,8 @@ type CallFact = {
 
 type FunctionEvidence = {
 	name: string;
+	owner: string | null;
+	qualifiedName: string;
 	kind: "function" | "method" | "arrow" | "function-expression";
 	exported: boolean;
 	async: boolean;
@@ -51,7 +53,7 @@ type FunctionEvidence = {
 };
 
 export type FileEvidence = {
-	schemaVersion: 1;
+	schemaVersion: 2;
 	sourceFile: string;
 	imports: Array<{
 		module: string;
@@ -85,6 +87,29 @@ function functionName(node: FunctionLike): string {
 	return "<anonymous>";
 }
 
+function functionOwner(node: FunctionLike): string | null {
+	if (Node.isMethodDeclaration(node)) {
+		const classDeclaration = node.getFirstAncestorByKind(
+			SyntaxKind.ClassDeclaration,
+		);
+		if (classDeclaration) return classDeclaration.getName() ?? null;
+	}
+
+	const parent = node.getParent();
+	if (
+		Node.isMethodDeclaration(node) ||
+		Node.isPropertyAssignment(parent) ||
+		Node.isPropertyDeclaration(parent)
+	) {
+		return (
+			node.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)?.getName() ??
+			null
+		);
+	}
+
+	return null;
+}
+
 function functionKind(node: FunctionLike): FunctionEvidence["kind"] {
 	if (Node.isFunctionDeclaration(node)) return "function";
 	if (Node.isMethodDeclaration(node)) return "method";
@@ -95,24 +120,27 @@ function functionKind(node: FunctionLike): FunctionEvidence["kind"] {
 function isExported(node: FunctionLike): boolean {
 	if (Node.isFunctionDeclaration(node)) return node.isExported();
 
-	const parent = node.getParent();
-	if (Node.isVariableDeclaration(parent)) {
-		const statement = parent.getFirstAncestorByKind(SyntaxKind.VariableStatement);
-		return statement?.isExported() ?? false;
-	}
+	const variableStatement = node.getFirstAncestorByKind(
+		SyntaxKind.VariableStatement,
+	);
+	if (variableStatement) return variableStatement.isExported();
 
-	if (Node.isPropertyDeclaration(parent)) {
-		return parent.getFirstAncestorByKind(SyntaxKind.ClassDeclaration)?.isExported() ?? false;
-	}
-
-	return false;
+	return (
+		node.getFirstAncestorByKind(SyntaxKind.ClassDeclaration)?.isExported() ??
+		false
+	);
 }
 
-function extractFunction(sourceFile: SourceFile, node: FunctionLike): FunctionEvidence {
-	const calls = node.getDescendantsOfKind(SyntaxKind.CallExpression).map((call) => ({
-		callee: call.getExpression().getText(),
-		location: location(sourceFile, call),
-	}));
+function extractFunction(
+	sourceFile: SourceFile,
+	node: FunctionLike,
+): FunctionEvidence {
+	const calls = node
+		.getDescendantsOfKind(SyntaxKind.CallExpression)
+		.map((call) => ({
+			callee: call.getExpression().getText(),
+			location: location(sourceFile, call),
+		}));
 
 	const propertyAccesses = Array.from(
 		new Set(
@@ -130,18 +158,27 @@ function extractFunction(sourceFile: SourceFile, node: FunctionLike): FunctionEv
 		),
 	).sort();
 
-	const throws = node.getDescendantsOfKind(SyntaxKind.ThrowStatement).map((statement) => ({
-		expression: statement.getExpression()?.getText() ?? "",
-		location: location(sourceFile, statement),
-	}));
+	const throws = node
+		.getDescendantsOfKind(SyntaxKind.ThrowStatement)
+		.map((statement) => ({
+			expression: statement.getExpression()?.getText() ?? "",
+			location: location(sourceFile, statement),
+		}));
 
-	const returns = node.getDescendantsOfKind(SyntaxKind.ReturnStatement).map((statement) => ({
-		expression: statement.getExpression()?.getText() ?? null,
-		location: location(sourceFile, statement),
-	}));
+	const returns = node
+		.getDescendantsOfKind(SyntaxKind.ReturnStatement)
+		.map((statement) => ({
+			expression: statement.getExpression()?.getText() ?? null,
+			location: location(sourceFile, statement),
+		}));
+
+	const name = functionName(node);
+	const owner = functionOwner(node);
 
 	return {
-		name: functionName(node),
+		name,
+		owner,
+		qualifiedName: owner ? `${owner}.${name}` : name,
 		kind: functionKind(node),
 		exported: isExported(node),
 		async: node.isAsync(),
@@ -172,8 +209,7 @@ export function extractFileEvidence(
 	filePath: string,
 ): FileEvidence {
 	const sourceFile =
-		project.getSourceFile(filePath) ??
-		project.addSourceFileAtPath(filePath);
+		project.getSourceFile(filePath) ?? project.addSourceFileAtPath(filePath);
 
 	const functionLikes: FunctionLike[] = [
 		...sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration),
@@ -183,7 +219,7 @@ export function extractFileEvidence(
 	].sort((a, b) => a.getStart() - b.getStart());
 
 	return {
-		schemaVersion: 1,
+		schemaVersion: 2,
 		sourceFile: sourceFile.getFilePath(),
 		imports: sourceFile.getImportDeclarations().map((declaration) => ({
 			module: declaration.getModuleSpecifierValue(),
@@ -195,7 +231,9 @@ export function extractFileEvidence(
 		})),
 		reExports: sourceFile.getExportDeclarations().map((declaration) => ({
 			module: declaration.getModuleSpecifierValue() ?? null,
-			exports: declaration.getNamedExports().map((namedExport) => namedExport.getText()),
+			exports: declaration
+				.getNamedExports()
+				.map((namedExport) => namedExport.getText()),
 		})),
 		functions: functionLikes.map((node) => extractFunction(sourceFile, node)),
 	};

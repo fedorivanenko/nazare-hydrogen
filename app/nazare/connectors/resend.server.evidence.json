@@ -1,108 +1,108 @@
 {
-  "schemaVersion": 1,
-  "sourceFile": "/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/connectors/resend.server.ts",
-  "imports": [],
-  "reExports": [
-    {
-      "module": "../registry/definitions",
-      "exports": [
-        "resendDefinition as resendConnector"
-      ]
-    }
-  ],
-  "functions": [
-    {
-      "name": "createResendContact",
-      "kind": "function",
-      "exported": true,
-      "async": true,
-      "location": {
-        "line": 7,
-        "column": 1
-      },
-      "parameters": [
-        {
-          "name": "email",
-          "type": "string",
-          "optional": false
-        },
-        {
-          "name": "env",
-          "type": "ResendConnectorEnv",
-          "optional": false
-        }
-      ],
-      "returnType": "Promise<{ id: string; }>",
-      "calls": [
-        {
-          "callee": "fetch",
-          "location": {
-            "line": 15,
-            "column": 25
-          }
-        },
-        {
-          "callee": "JSON.stringify",
-          "location": {
-            "line": 21,
-            "column": 9
-          }
-        },
-        {
-          "callee": "response.text",
-          "location": {
-            "line": 28,
-            "column": 25
-          }
-        },
-        {
-          "callee": "response.json",
-          "location": {
-            "line": 34,
-            "column": 9
-          }
-        }
-      ],
-      "propertyAccesses": [
-        "JSON.stringify",
-        "env.RESEND_API_KEY",
-        "response.json",
-        "response.ok",
-        "response.status",
-        "response.text"
-      ],
-      "stringLiterals": [
-        "Content-Type",
-        "POST",
-        "RESEND_API_KEY is not configured",
-        "application/json",
-        "https://api.resend.com/contacts"
-      ],
-      "throws": [
-        {
-          "expression": "new Error(\"RESEND_API_KEY is not configured\")",
-          "location": {
-            "line": 12,
-            "column": 3
-          }
-        },
-        {
-          "expression": "new Error(\n\t\t\t`Resend contact creation failed: ${response.status} ${details}`,\n\t\t)",
-          "location": {
-            "line": 29,
-            "column": 3
-          }
-        }
-      ],
-      "returns": [
-        {
-          "expression": "response.json() as Promise<{ id: string }>",
-          "location": {
-            "line": 34,
-            "column": 2
-          }
-        }
-      ]
-    }
-  ]
+	"schemaVersion": 2,
+	"sourceFile": "/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/connectors/resend.server.ts",
+	"imports": [],
+	"reExports": [
+		{
+			"module": "../registry/definitions",
+			"exports": ["resendDefinition as resendConnector"]
+		}
+	],
+	"functions": [
+		{
+			"name": "createResendContact",
+			"owner": null,
+			"qualifiedName": "createResendContact",
+			"kind": "function",
+			"exported": true,
+			"async": true,
+			"location": {
+				"line": 7,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "email",
+					"type": "string",
+					"optional": false
+				},
+				{
+					"name": "env",
+					"type": "ResendConnectorEnv",
+					"optional": false
+				}
+			],
+			"returnType": "Promise<{ id: string; }>",
+			"calls": [
+				{
+					"callee": "fetch",
+					"location": {
+						"line": 15,
+						"column": 25
+					}
+				},
+				{
+					"callee": "JSON.stringify",
+					"location": {
+						"line": 21,
+						"column": 9
+					}
+				},
+				{
+					"callee": "response.text",
+					"location": {
+						"line": 28,
+						"column": 25
+					}
+				},
+				{
+					"callee": "response.json",
+					"location": {
+						"line": 34,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": [
+				"JSON.stringify",
+				"env.RESEND_API_KEY",
+				"response.json",
+				"response.ok",
+				"response.status",
+				"response.text"
+			],
+			"stringLiterals": [
+				"Content-Type",
+				"POST",
+				"RESEND_API_KEY is not configured",
+				"application/json",
+				"https://api.resend.com/contacts"
+			],
+			"throws": [
+				{
+					"expression": "new Error(\"RESEND_API_KEY is not configured\")",
+					"location": {
+						"line": 12,
+						"column": 3
+					}
+				},
+				{
+					"expression": "new Error(\n\t\t\t`Resend contact creation failed: ${response.status} ${details}`,\n\t\t)",
+					"location": {
+						"line": 29,
+						"column": 3
+					}
+				}
+			],
+			"returns": [
+				{
+					"expression": "response.json() as Promise<{ id: string }>",
+					"location": {
+						"line": 34,
+						"column": 2
+					}
+				}
+			]
+		}
+	]
 }

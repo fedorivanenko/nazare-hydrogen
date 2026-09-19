@@ -1,5 +1,5 @@
 {
-	"schemaVersion": 1,
+	"schemaVersion": 2,
 	"sourceFile": "/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/capabilities/collect-email-subscribers.ts",
 	"imports": [
 		{
@@ -19,6 +19,8 @@
 	"functions": [
 		{
 			"name": "validateEmail",
+			"owner": null,
+			"qualifiedName": "validateEmail",
 			"kind": "function",
 			"exported": false,
 			"async": false,
@@ -58,8 +60,10 @@
 		},
 		{
 			"name": "execute",
+			"owner": "collectEmailSubscribers",
+			"qualifiedName": "collectEmailSubscribers.execute",
 			"kind": "method",
-			"exported": false,
+			"exported": true,
 			"async": true,
 			"location": {
 				"line": 24,

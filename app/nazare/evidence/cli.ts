@@ -23,7 +23,7 @@ const project = createProject(resolve(process.cwd(), "tsconfig.json"));
 const evidence = extractFileEvidence(project, absoluteInput);
 const output = absoluteInput.replace(/\.tsx?$/, ".evidence.json");
 
-await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
+await writeFile(output, `${JSON.stringify(evidence, null, "\t")}\n`, "utf8");
 
 console.log(
 	`✓ Wrote evidence for ${relative(process.cwd(), absoluteInput)} → ${relative(
