@@ -18,9 +18,9 @@
 	"reExports": [],
 	"functions": [
 		{
-			"name": "validateEmail",
+			"name": "validateSubscriberEmail",
 			"owner": null,
-			"qualifiedName": "validateEmail",
+			"qualifiedName": "validateSubscriberEmail",
 			"kind": "function",
 			"exported": false,
 			"async": false,
@@ -59,15 +59,73 @@
 			]
 		},
 		{
-			"name": "execute",
-			"owner": "collectEmailSubscribers",
-			"qualifiedName": "collectEmailSubscribers.execute",
-			"kind": "method",
-			"exported": true,
+			"name": "createInvalidEmailResult",
+			"owner": null,
+			"qualifiedName": "createInvalidEmailResult",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 13,
+				"column": 1
+			},
+			"parameters": [],
+			"returnType": "{ ok: false; error: string; }",
+			"calls": [],
+			"propertyAccesses": [],
+			"stringLiterals": ["Enter a valid email address."],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "{ ok: false as const, error: \"Enter a valid email address.\" }",
+					"location": {
+						"line": 14,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "createSubscriberCollectedResult",
+			"owner": null,
+			"qualifiedName": "createSubscriberCollectedResult",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 17,
+				"column": 1
+			},
+			"parameters": [],
+			"returnType": "{ ok: true; evidence: { type: string; connector: string; result: string; }; }",
+			"calls": [],
+			"propertyAccesses": [],
+			"stringLiterals": [
+				"connector-result",
+				"contact-created",
+				"provider.resend.contacts.create"
+			],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "{\n\t\tok: true as const,\n\t\tevidence: {\n\t\t\ttype: \"connector-result\",\n\t\t\tconnector: \"provider.resend.contacts.create\",\n\t\t\tresult: \"contact-created\",\n\t\t},\n\t}",
+					"location": {
+						"line": 18,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "collectEmailSubscriber",
+			"owner": null,
+			"qualifiedName": "collectEmailSubscriber",
+			"kind": "function",
+			"exported": false,
 			"async": true,
 			"location": {
-				"line": 24,
-				"column": 2
+				"line": 28,
+				"column": 1
 			},
 			"parameters": [
 				{
@@ -81,45 +139,53 @@
 					"optional": false
 				}
 			],
-			"returnType": "Promise<{ ok: false; error: string; evidence?: undefined; } | { ok: true; evidence: { type: string; connector: string; result: string; }; error?: undefined; }>",
+			"returnType": "Promise<{ ok: false; error: string; } | { ok: true; evidence: { type: string; connector: string; result: string; }; }>",
 			"calls": [
 				{
-					"callee": "policyImplementations[\"valid-email\"]",
+					"callee": "validateSubscriberEmail",
 					"location": {
-						"line": 25,
-						"column": 8
+						"line": 29,
+						"column": 7
+					}
+				},
+				{
+					"callee": "createInvalidEmailResult",
+					"location": {
+						"line": 30,
+						"column": 10
 					}
 				},
 				{
 					"callee": "createResendContact",
 					"location": {
-						"line": 29,
+						"line": 33,
+						"column": 8
+					}
+				},
+				{
+					"callee": "createSubscriberCollectedResult",
+					"location": {
+						"line": 34,
 						"column": 9
 					}
 				}
 			],
 			"propertyAccesses": [],
-			"stringLiterals": [
-				"Enter a valid email address.",
-				"connector-result",
-				"contact-created",
-				"provider.resend.contacts.create",
-				"valid-email"
-			],
+			"stringLiterals": [],
 			"throws": [],
 			"returns": [
 				{
-					"expression": "{ ok: false as const, error: \"Enter a valid email address.\" }",
+					"expression": "createInvalidEmailResult()",
 					"location": {
-						"line": 26,
-						"column": 4
+						"line": 30,
+						"column": 3
 					}
 				},
 				{
-					"expression": "{\n\t\t\tok: true as const,\n\t\t\tevidence: {\n\t\t\t\ttype: \"connector-result\",\n\t\t\t\tconnector: \"provider.resend.contacts.create\",\n\t\t\t\tresult: \"contact-created\",\n\t\t\t},\n\t\t}",
+					"expression": "createSubscriberCollectedResult()",
 					"location": {
-						"line": 31,
-						"column": 3
+						"line": 34,
+						"column": 2
 					}
 				}
 			]

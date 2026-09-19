@@ -1,13 +1,99 @@
 {
-	"function": "collectEmailSubscribers",
-	"primaryResponsibility": "email.subscribers.collect",
-	"description": "Collect email subscribers by validating their email addresses and creating contacts in Resend.",
-	"mixed": false,
-	"evidence": [
-		"source:collect-email-subscribers.ts",
-		"import:createResendContact,type ResendConnectorEnv from ../connectors/resend.server",
-		"function:collectEmailSubscribers.execute; kind:method; exported:true; async:true",
-		"call:collectEmailSubscribers.execute -> createResendContact",
-		"string:collectEmailSubscribers.execute -> \"provider.resend.contacts.create\""
+	"schemaVersion": 3,
+	"sourceFile": "app/nazare/capabilities/collect-email-subscribers.ts",
+	"functions": [
+		{
+			"functionId": "app/nazare/capabilities/collect-email-subscribers.ts#validateSubscriberEmail",
+			"function": "validateSubscriberEmail",
+			"responsibility": "email.address-pattern.validate",
+			"description": "Validate that an email address conforms to the expected pattern.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": false,
+				"line": 9,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "EMAIL_PATTERN.test",
+					"line": 10,
+					"column": 9,
+					"targetFunctionId": null,
+					"responsibility": "email.address.validate"
+				}
+			]
+		},
+		{
+			"functionId": "app/nazare/capabilities/collect-email-subscribers.ts#createInvalidEmailResult",
+			"function": "createInvalidEmailResult",
+			"responsibility": "email.result.create",
+			"description": "Create a result indicating an invalid email address was provided.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": false,
+				"line": 13,
+				"column": 1
+			},
+			"calls": []
+		},
+		{
+			"functionId": "app/nazare/capabilities/collect-email-subscribers.ts#createSubscriberCollectedResult",
+			"function": "createSubscriberCollectedResult",
+			"responsibility": "subscriber.collected-result.create",
+			"description": "Create a subscriber collected result with specific evidence types and connector information.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": false,
+				"line": 17,
+				"column": 1
+			},
+			"calls": []
+		},
+		{
+			"functionId": "app/nazare/capabilities/collect-email-subscribers.ts#collectEmailSubscriber",
+			"function": "collectEmailSubscriber",
+			"responsibility": "email.subscriber.create",
+			"description": "Collects an email subscriber by validating the email and creating a contact.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": true,
+				"line": 28,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "validateSubscriberEmail",
+					"line": 29,
+					"column": 7,
+					"targetFunctionId": "app/nazare/capabilities/collect-email-subscribers.ts#validateSubscriberEmail",
+					"responsibility": "email.address-pattern.validate"
+				},
+				{
+					"callee": "createInvalidEmailResult",
+					"line": 30,
+					"column": 10,
+					"targetFunctionId": "app/nazare/capabilities/collect-email-subscribers.ts#createInvalidEmailResult",
+					"responsibility": "email.result.create"
+				},
+				{
+					"callee": "createResendContact",
+					"line": 33,
+					"column": 8,
+					"targetFunctionId": null,
+					"responsibility": "resend.contact.create"
+				},
+				{
+					"callee": "createSubscriberCollectedResult",
+					"line": 34,
+					"column": 9,
+					"targetFunctionId": "app/nazare/capabilities/collect-email-subscribers.ts#createSubscriberCollectedResult",
+					"responsibility": "subscriber.collected-result.create"
+				}
+			]
+		}
 	]
 }

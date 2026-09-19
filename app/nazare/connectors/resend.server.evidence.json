@@ -10,6 +10,203 @@
 	],
 	"functions": [
 		{
+			"name": "normalizeEmailAddress",
+			"owner": null,
+			"qualifiedName": "normalizeEmailAddress",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 11,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "email",
+					"type": "string",
+					"optional": false
+				}
+			],
+			"returnType": "string",
+			"calls": [
+				{
+					"callee": "email.trim",
+					"location": {
+						"line": 12,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": ["email.trim"],
+			"stringLiterals": [],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "email.trim()",
+					"location": {
+						"line": 12,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "serializeResendContact",
+			"owner": null,
+			"qualifiedName": "serializeResendContact",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 15,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "email",
+					"type": "string",
+					"optional": false
+				}
+			],
+			"returnType": "string",
+			"calls": [
+				{
+					"callee": "JSON.stringify",
+					"location": {
+						"line": 16,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": ["JSON.stringify"],
+			"stringLiterals": [],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "JSON.stringify({\n\t\temail,\n\t\tunsubscribed: false,\n\t})",
+					"location": {
+						"line": 16,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "createResendHeaders",
+			"owner": null,
+			"qualifiedName": "createResendHeaders",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 22,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "apiKey",
+					"type": "string",
+					"optional": false
+				}
+			],
+			"returnType": "{ Authorization: string; \"Content-Type\": string; }",
+			"calls": [],
+			"propertyAccesses": [],
+			"stringLiterals": ["Content-Type", "application/json"],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "{\n\t\tAuthorization: `Bearer ${apiKey}`,\n\t\t\"Content-Type\": \"application/json\",\n\t}",
+					"location": {
+						"line": 23,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "readResendFailure",
+			"owner": null,
+			"qualifiedName": "readResendFailure",
+			"kind": "function",
+			"exported": false,
+			"async": true,
+			"location": {
+				"line": 29,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "response",
+					"type": "Response",
+					"optional": false
+				}
+			],
+			"returnType": "Promise<string>",
+			"calls": [
+				{
+					"callee": "response.text",
+					"location": {
+						"line": 30,
+						"column": 24
+					}
+				}
+			],
+			"propertyAccesses": ["response.status", "response.text"],
+			"stringLiterals": [],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "`Resend contact creation failed: ${response.status} ${details}`",
+					"location": {
+						"line": 31,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "parseResendContact",
+			"owner": null,
+			"qualifiedName": "parseResendContact",
+			"kind": "function",
+			"exported": false,
+			"async": true,
+			"location": {
+				"line": 34,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "response",
+					"type": "Response",
+					"optional": false
+				}
+			],
+			"returnType": "Promise<ResendContact>",
+			"calls": [
+				{
+					"callee": "response.json",
+					"location": {
+						"line": 35,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": ["response.json"],
+			"stringLiterals": [],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "response.json() as Promise<ResendContact>",
+					"location": {
+						"line": 35,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
 			"name": "createResendContact",
 			"owner": null,
 			"qualifiedName": "createResendContact",
@@ -17,7 +214,7 @@
 			"exported": true,
 			"async": true,
 			"location": {
-				"line": 7,
+				"line": 38,
 				"column": 1
 			},
 			"parameters": [
@@ -32,73 +229,78 @@
 					"optional": false
 				}
 			],
-			"returnType": "Promise<{ id: string; }>",
+			"returnType": "Promise<ResendContact>",
 			"calls": [
+				{
+					"callee": "normalizeEmailAddress",
+					"location": {
+						"line": 46,
+						"column": 26
+					}
+				},
+				{
+					"callee": "serializeResendContact",
+					"location": {
+						"line": 47,
+						"column": 15
+					}
+				},
+				{
+					"callee": "createResendHeaders",
+					"location": {
+						"line": 48,
+						"column": 18
+					}
+				},
 				{
 					"callee": "fetch",
 					"location": {
-						"line": 15,
+						"line": 49,
 						"column": 25
 					}
 				},
 				{
-					"callee": "JSON.stringify",
+					"callee": "readResendFailure",
 					"location": {
-						"line": 21,
-						"column": 9
-					}
-				},
-				{
-					"callee": "response.text",
-					"location": {
-						"line": 28,
+						"line": 56,
 						"column": 25
 					}
 				},
 				{
-					"callee": "response.json",
+					"callee": "parseResendContact",
 					"location": {
-						"line": 34,
+						"line": 59,
 						"column": 9
 					}
 				}
 			],
-			"propertyAccesses": [
-				"JSON.stringify",
-				"env.RESEND_API_KEY",
-				"response.json",
-				"response.ok",
-				"response.status",
-				"response.text"
-			],
+			"propertyAccesses": ["env.RESEND_API_KEY", "response.ok"],
 			"stringLiterals": [
-				"Content-Type",
 				"POST",
 				"RESEND_API_KEY is not configured",
-				"application/json",
 				"https://api.resend.com/contacts"
 			],
 			"throws": [
 				{
 					"expression": "new Error(\"RESEND_API_KEY is not configured\")",
 					"location": {
-						"line": 12,
+						"line": 43,
 						"column": 3
 					}
 				},
 				{
-					"expression": "new Error(\n\t\t\t`Resend contact creation failed: ${response.status} ${details}`,\n\t\t)",
+					"expression": "new Error(await readResendFailure(response))",
 					"location": {
-						"line": 29,
+						"line": 56,
 						"column": 3
 					}
 				}
 			],
 			"returns": [
 				{
-					"expression": "response.json() as Promise<{ id: string }>",
+					"expression": "parseResendContact(response)",
 					"location": {
-						"line": 34,
+						"line": 59,
 						"column": 2
 					}
 				}

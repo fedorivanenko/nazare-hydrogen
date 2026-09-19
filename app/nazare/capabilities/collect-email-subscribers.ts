@@ -6,12 +6,36 @@ import { collectEmailSubscribersDefinition } from "../registry/definitions";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function validateEmail(email: string) {
+function validateSubscriberEmail(email: string) {
 	return EMAIL_PATTERN.test(email);
 }
 
+function createInvalidEmailResult() {
+	return { ok: false as const, error: "Enter a valid email address." };
+}
+
+function createSubscriberCollectedResult() {
+	return {
+		ok: true as const,
+		evidence: {
+			type: "connector-result",
+			connector: "provider.resend.contacts.create",
+			result: "contact-created",
+		},
+	};
+}
+
+async function collectEmailSubscriber(email: string, env: ResendConnectorEnv) {
+	if (!validateSubscriberEmail(email)) {
+		return createInvalidEmailResult();
+	}
+
+	await createResendContact(email, env);
+	return createSubscriberCollectedResult();
+}
+
 const policyImplementations = {
-	"valid-email": validateEmail,
+	"valid-email": validateSubscriberEmail,
 } satisfies Record<
 	(typeof collectEmailSubscribersDefinition.policies)[number]["id"],
 	(email: string) => boolean
@@ -20,21 +44,5 @@ const policyImplementations = {
 export const collectEmailSubscribers = {
 	...collectEmailSubscribersDefinition,
 	policy: policyImplementations,
-
-	async execute(email: string, env: ResendConnectorEnv) {
-		if (!policyImplementations["valid-email"](email)) {
-			return { ok: false as const, error: "Enter a valid email address." };
-		}
-
-		await createResendContact(email, env);
-
-		return {
-			ok: true as const,
-			evidence: {
-				type: "connector-result",
-				connector: "provider.resend.contacts.create",
-				result: "contact-created",
-			},
-		};
-	},
+	execute: collectEmailSubscriber,
 };

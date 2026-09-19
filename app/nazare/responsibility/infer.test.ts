@@ -4,124 +4,128 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { FileEvidence } from "../evidence/extract";
 import {
-	buildEvidenceFacts,
-	functionCandidates,
-	parseResponsibility,
-	primaryFunction,
-	responsibilityCandidates,
+	extractFunctionCalls,
+	identifierResponsibility,
+	responsibilityReportSchema,
 } from "./infer";
 
-const evidence = {
-	schemaVersion: 2,
-	sourceFile: "/capability.ts",
-	imports: [],
-	reExports: [],
-	functions: [
-		{
-			name: "validateEmail",
-			owner: null,
-			qualifiedName: "validateEmail",
-			kind: "function",
-			exported: false,
-			async: false,
-			location: { line: 1, column: 1 },
-			parameters: [],
-			returnType: "boolean",
-			calls: [],
-			propertyAccesses: [],
-			stringLiterals: [],
-			throws: [],
-			returns: [],
-		},
-		{
-			name: "execute",
-			owner: "collectEmailSubscribers",
-			qualifiedName: "collectEmailSubscribers.execute",
-			kind: "method",
-			exported: true,
-			async: true,
-			location: { line: 2, column: 1 },
-			parameters: [],
-			returnType: "Promise<void>",
-			calls: [],
-			propertyAccesses: [],
-			stringLiterals: [],
-			throws: [],
-			returns: [],
-		},
-	],
-} as FileEvidence;
-
-const response = {
-	function: "collectEmailSubscribers",
-	primaryResponsibility: "resend.contacts.create",
-	description: "Create a contact in Resend",
-	mixed: false,
-	evidence: ["createResendContact"],
+const normalizeEmailAddress: FileEvidence["functions"][number] = {
+	name: "normalizeEmailAddress",
+	owner: null,
+	qualifiedName: "normalizeEmailAddress",
+	kind: "function",
+	exported: false,
+	async: false,
+	location: { line: 11, column: 1 },
+	parameters: [],
+	returnType: "string",
+	calls: [{ callee: "email.trim", location: { line: 12, column: 9 } }],
+	propertyAccesses: ["email.trim"],
+	stringLiterals: [],
+	throws: [],
+	returns: [],
 };
 
-test("function candidates resolve exported methods to their object owner", () => {
-	assert.deepEqual(functionCandidates(evidence), ["collectEmailSubscribers"]);
-	assert.equal(primaryFunction(evidence), "collectEmailSubscribers");
-});
+const createResendContact: FileEvidence["functions"][number] = {
+	name: "createResendContact",
+	owner: null,
+	qualifiedName: "createResendContact",
+	kind: "function",
+	exported: true,
+	async: true,
+	location: { line: 39, column: 1 },
+	parameters: [],
+	returnType: "Promise<ResendContact>",
+	calls: [
+		{
+			callee: "normalizeEmailAddress",
+			location: { line: 46, column: 26 },
+		},
+		{ callee: "fetch", location: { line: 49, column: 25 } },
+	],
+	propertyAccesses: [],
+	stringLiterals: ["https://api.resend.com/contacts"],
+	throws: [],
+	returns: [],
+};
 
-test("responsibility candidates combine symbol and explicit provider taxonomies", () => {
-	const evidenceWithProvider = structuredClone(evidence);
-	evidenceWithProvider.functions[1]?.stringLiterals.push(
-		"provider.resend.contacts.create",
+const evidence: FileEvidence = {
+	schemaVersion: 2,
+	sourceFile:
+		"/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/connectors/resend.server.ts",
+	imports: [],
+	reExports: [],
+	functions: [normalizeEmailAddress, createResendContact],
+};
+
+test("responsibility IDs derive from function declarations", () => {
+	assert.equal(
+		identifierResponsibility("normalizeEmailAddress"),
+		"email.address.transform",
 	);
-
-	assert.deepEqual(responsibilityCandidates(evidenceWithProvider), [
-		"email.subscribers.collect",
-		"resend.contacts.create",
-	]);
+	assert.equal(
+		identifierResponsibility("createResendContact"),
+		"resend.contact.create",
+	);
 });
 
-test("evidence facts use stable IDs and exact AST facts", () => {
-	assert.deepEqual(buildEvidenceFacts(evidence), [
-		{
-			id: "F1",
-			text: "source:capability.ts",
-		},
-		{
-			id: "F2",
-			text: "function:validateEmail; kind:function; exported:false; async:false",
-		},
-		{
-			id: "F3",
-			text: "function:collectEmailSubscribers.execute; kind:method; exported:true; async:true",
-		},
+test("calls reference inferred local declaration responsibilities", () => {
+	const responsibilities = new Map([
+		["normalizeEmailAddress", "email.address.transform"],
+		["createResendContact", "resend.contact.create"],
 	]);
-});
-
-test("responsibility accepts an evidenced exported object owner", () => {
 	assert.deepEqual(
-		parseResponsibility(JSON.stringify(response), evidence),
-		response,
+		extractFunctionCalls(evidence, createResendContact, responsibilities),
+		[
+			{
+				callee: "normalizeEmailAddress",
+				line: 46,
+				column: 26,
+				targetFunctionId:
+					"app/nazare/connectors/resend.server.ts#normalizeEmailAddress",
+				responsibility: "email.address.transform",
+			},
+			{
+				callee: "fetch",
+				line: 49,
+				column: 25,
+				targetFunctionId: null,
+				responsibility: "http.request.execute",
+			},
+		],
 	);
 });
 
-test("responsibility rejects unsupported function names", () => {
-	assert.throws(
-		() =>
-			parseResponsibility(
-				JSON.stringify({ ...response, function: "inventedFunction" }),
-				evidence,
-			),
-		/unsupported function "inventedFunction"/,
-	);
-});
+test("responsibility report separates declaration and call identities", () => {
+	const report = {
+		schemaVersion: 3,
+		sourceFile: "app/nazare/connectors/resend.server.ts",
+		functions: [
+			{
+				functionId:
+					"app/nazare/connectors/resend.server.ts#normalizeEmailAddress",
+				function: "normalizeEmailAddress",
+				responsibility: "email.address.transform",
+				description: "Normalize an email address.",
+				declaration: {
+					kind: "function",
+					exported: false,
+					async: false,
+					line: 11,
+					column: 1,
+				},
+				calls: [
+					{
+						callee: "email.trim",
+						line: 12,
+						column: 9,
+						targetFunctionId: null,
+						responsibility: "email.address.transform",
+					},
+				],
+			},
+		],
+	};
 
-test("responsibility rejects generic taxonomy placeholders", () => {
-	assert.throws(
-		() =>
-			parseResponsibility(
-				JSON.stringify({
-					...response,
-					primaryResponsibility: "service.resource.action",
-				}),
-				evidence,
-			),
-		/generic responsibility label/,
-	);
+	assert.deepEqual(responsibilityReportSchema.parse(report), report);
 });

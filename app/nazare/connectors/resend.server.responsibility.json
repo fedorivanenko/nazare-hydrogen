@@ -1,12 +1,165 @@
 {
-	"function": "createResendContact",
-	"primaryResponsibility": "resend.contact.create",
-	"description": "Create a new contact in the Resend system.",
-	"mixed": false,
-	"evidence": [
-		"function:createResendContact; kind:function; exported:true; async:true",
-		"call:createResendContact -> fetch",
-		"call:createResendContact -> JSON.stringify",
-		"string:createResendContact -> \"https://api.resend.com/contacts\""
+	"schemaVersion": 3,
+	"sourceFile": "app/nazare/connectors/resend.server.ts",
+	"functions": [
+		{
+			"functionId": "app/nazare/connectors/resend.server.ts#normalizeEmailAddress",
+			"function": "normalizeEmailAddress",
+			"responsibility": "email.address.transform",
+			"description": "Normalize an email address by trimming whitespace.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": false,
+				"line": 11,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "email.trim",
+					"line": 12,
+					"column": 9,
+					"targetFunctionId": null,
+					"responsibility": "email.address.transform"
+				}
+			]
+		},
+		{
+			"functionId": "app/nazare/connectors/resend.server.ts#serializeResendContact",
+			"function": "serializeResendContact",
+			"responsibility": "contact.json.transform",
+			"description": "Serialize contact information into a JSON string for Resend API consumption.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": false,
+				"line": 15,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "JSON.stringify",
+					"line": 16,
+					"column": 9,
+					"targetFunctionId": null,
+					"responsibility": "json.value.transform"
+				}
+			]
+		},
+		{
+			"functionId": "app/nazare/connectors/resend.server.ts#createResendHeaders",
+			"function": "createResendHeaders",
+			"responsibility": "header.resend-api-request.create",
+			"description": "Create resend headers for API requests.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": false,
+				"line": 22,
+				"column": 1
+			},
+			"calls": []
+		},
+		{
+			"functionId": "app/nazare/connectors/resend.server.ts#readResendFailure",
+			"function": "readResendFailure",
+			"responsibility": "resend.response-details.read",
+			"description": "Read and format the failure details from a Resend API response.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": true,
+				"line": 29,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "response.text",
+					"line": 30,
+					"column": 24,
+					"targetFunctionId": null,
+					"responsibility": "http.response.read"
+				}
+			]
+		},
+		{
+			"functionId": "app/nazare/connectors/resend.server.ts#parseResendContact",
+			"function": "parseResendContact",
+			"responsibility": "resend.contact.transform",
+			"description": "Parse the JSON response from Resend into a structured contact object.",
+			"declaration": {
+				"kind": "function",
+				"exported": false,
+				"async": true,
+				"line": 34,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "response.json",
+					"line": 35,
+					"column": 9,
+					"targetFunctionId": null,
+					"responsibility": "http.response.transform"
+				}
+			]
+		},
+		{
+			"functionId": "app/nazare/connectors/resend.server.ts#createResendContact",
+			"function": "createResendContact",
+			"responsibility": "resend-contact.resend-api.create",
+			"description": "Create a Resend contact by sending contact data to the Resend API.",
+			"declaration": {
+				"kind": "function",
+				"exported": true,
+				"async": true,
+				"line": 38,
+				"column": 1
+			},
+			"calls": [
+				{
+					"callee": "normalizeEmailAddress",
+					"line": 46,
+					"column": 26,
+					"targetFunctionId": "app/nazare/connectors/resend.server.ts#normalizeEmailAddress",
+					"responsibility": "email.address.transform"
+				},
+				{
+					"callee": "serializeResendContact",
+					"line": 47,
+					"column": 15,
+					"targetFunctionId": "app/nazare/connectors/resend.server.ts#serializeResendContact",
+					"responsibility": "contact.json.transform"
+				},
+				{
+					"callee": "createResendHeaders",
+					"line": 48,
+					"column": 18,
+					"targetFunctionId": "app/nazare/connectors/resend.server.ts#createResendHeaders",
+					"responsibility": "header.resend-api-request.create"
+				},
+				{
+					"callee": "fetch",
+					"line": 49,
+					"column": 25,
+					"targetFunctionId": null,
+					"responsibility": "http.request.execute"
+				},
+				{
+					"callee": "readResendFailure",
+					"line": 56,
+					"column": 25,
+					"targetFunctionId": "app/nazare/connectors/resend.server.ts#readResendFailure",
+					"responsibility": "resend.response-details.read"
+				},
+				{
+					"callee": "parseResendContact",
+					"line": 59,
+					"column": 9,
+					"targetFunctionId": "app/nazare/connectors/resend.server.ts#parseResendContact",
+					"responsibility": "resend.contact.transform"
+				}
+			]
+		}
 	]
 }
