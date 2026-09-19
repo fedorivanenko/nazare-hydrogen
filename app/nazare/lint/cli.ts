@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getEntity, listEntities } from "../registry/index";
 import type { RegistryEntity } from "../registry/schema";
@@ -10,6 +10,62 @@ type Diagnostic = {
 	entity: string;
 	message: string;
 };
+
+async function sourceFiles(directory: string): Promise<string[]> {
+	const entries = await readdir(directory, { withFileTypes: true });
+	const files = await Promise.all(
+		entries.map(async (entry) => {
+			const path = `${directory}/${entry.name}`;
+			if (entry.isDirectory()) return sourceFiles(path);
+			return /\.tsx?$/.test(entry.name) ? [path] : [];
+		}),
+	);
+	return files.flat();
+}
+
+async function lintResponsibilityAnnotations(): Promise<Diagnostic[]> {
+	const diagnostics: Diagnostic[] = [];
+	const declarations = new Map<string, string>();
+	const blocks = /\/\*\*[\s\S]*?\*\//g;
+	const responsibilityPattern =
+		/^[a-z0-9-]+\.[a-z0-9-]+\.(?:create|read|update|delete|validate|transform|execute)$/;
+
+	for (const path of await sourceFiles("app/nazare")) {
+		const contents = await readFile(path, "utf8");
+		for (const block of contents.match(blocks) ?? []) {
+			const declarationId = block.match(/@nazare-id\s+([^\s*]+)/)?.[1];
+			const responsibility = block.match(/@responsibility\s+([^\s*]+)/)?.[1];
+			if (!declarationId && !responsibility) continue;
+			if (!declarationId || !/^fn_[a-f0-9]{32}$/.test(declarationId)) {
+				diagnostics.push({
+					level: "error",
+					entity: path,
+					message: "Responsibility annotation requires a valid @nazare-id",
+				});
+				continue;
+			}
+			if (!responsibility || !responsibilityPattern.test(responsibility)) {
+				diagnostics.push({
+					level: "error",
+					entity: declarationId,
+					message: "Invalid or missing @responsibility",
+				});
+			}
+			const existing = declarations.get(declarationId);
+			if (existing) {
+				diagnostics.push({
+					level: "error",
+					entity: declarationId,
+					message: `Duplicate @nazare-id in ${existing} and ${path}`,
+				});
+			} else {
+				declarations.set(declarationId, path);
+			}
+		}
+	}
+
+	return diagnostics;
+}
 
 async function lintRegistry() {
 	const diagnostics: Diagnostic[] = [];
@@ -148,7 +204,10 @@ async function lintRegistry() {
 	return diagnostics;
 }
 
-const diagnostics = await lintRegistry();
+const diagnostics = [
+	...(await lintRegistry()),
+	...(await lintResponsibilityAnnotations()),
+];
 for (const diagnostic of diagnostics) {
 	const marker = diagnostic.level === "error" ? "✗" : "⚠";
 	console.error(`${marker} ${diagnostic.entity}: ${diagnostic.message}`);

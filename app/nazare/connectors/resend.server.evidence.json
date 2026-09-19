@@ -13,47 +13,8 @@
 			"name": "normalizeEmailAddress",
 			"owner": null,
 			"qualifiedName": "normalizeEmailAddress",
-			"kind": "function",
-			"exported": false,
-			"async": false,
-			"location": {
-				"line": 11,
-				"column": 1
-			},
-			"parameters": [
-				{
-					"name": "email",
-					"type": "string",
-					"optional": false
-				}
-			],
-			"returnType": "string",
-			"calls": [
-				{
-					"callee": "email.trim",
-					"location": {
-						"line": 12,
-						"column": 9
-					}
-				}
-			],
-			"propertyAccesses": ["email.trim"],
-			"stringLiterals": [],
-			"throws": [],
-			"returns": [
-				{
-					"expression": "email.trim()",
-					"location": {
-						"line": 12,
-						"column": 2
-					}
-				}
-			]
-		},
-		{
-			"name": "serializeResendContact",
-			"owner": null,
-			"qualifiedName": "serializeResendContact",
+			"declarationId": "fn_8f469915c8414defa17333532177e0af",
+			"declaredResponsibility": "email.address.transform",
 			"kind": "function",
 			"exported": false,
 			"async": false,
@@ -71,9 +32,52 @@
 			"returnType": "string",
 			"calls": [
 				{
-					"callee": "JSON.stringify",
+					"callee": "email.trim",
 					"location": {
 						"line": 16,
+						"column": 9
+					}
+				}
+			],
+			"propertyAccesses": ["email.trim"],
+			"stringLiterals": [],
+			"throws": [],
+			"returns": [
+				{
+					"expression": "email.trim()",
+					"location": {
+						"line": 16,
+						"column": 2
+					}
+				}
+			]
+		},
+		{
+			"name": "serializeResendContact",
+			"owner": null,
+			"qualifiedName": "serializeResendContact",
+			"declarationId": "fn_51beddd26c404b43af91304d3945b961",
+			"declaredResponsibility": "contact.json.transform",
+			"kind": "function",
+			"exported": false,
+			"async": false,
+			"location": {
+				"line": 23,
+				"column": 1
+			},
+			"parameters": [
+				{
+					"name": "email",
+					"type": "string",
+					"optional": false
+				}
+			],
+			"returnType": "string",
+			"calls": [
+				{
+					"callee": "JSON.stringify",
+					"location": {
+						"line": 24,
 						"column": 9
 					}
 				}
@@ -85,7 +89,7 @@
 				{
 					"expression": "JSON.stringify({\n\t\temail,\n\t\tunsubscribed: false,\n\t})",
 					"location": {
-						"line": 16,
+						"line": 24,
 						"column": 2
 					}
 				}
@@ -95,11 +99,13 @@
 			"name": "createResendHeaders",
 			"owner": null,
 			"qualifiedName": "createResendHeaders",
+			"declarationId": "fn_98ff2832fc9943829a21cc53bf0fc347",
+			"declaredResponsibility": "resend.header.create",
 			"kind": "function",
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 22,
+				"line": 34,
 				"column": 1
 			},
 			"parameters": [
@@ -118,7 +124,7 @@
 				{
 					"expression": "{\n\t\tAuthorization: `Bearer ${apiKey}`,\n\t\t\"Content-Type\": \"application/json\",\n\t}",
 					"location": {
-						"line": 23,
+						"line": 35,
 						"column": 2
 					}
 				}
@@ -128,11 +134,13 @@
 			"name": "readResendFailure",
 			"owner": null,
 			"qualifiedName": "readResendFailure",
+			"declarationId": "fn_9e78a85c36c54f71ab9492e86f4b07d0",
+			"declaredResponsibility": "resend.failure.read",
 			"kind": "function",
 			"exported": false,
 			"async": true,
 			"location": {
-				"line": 29,
+				"line": 45,
 				"column": 1
 			},
 			"parameters": [
@@ -147,7 +155,7 @@
 				{
 					"callee": "response.text",
 					"location": {
-						"line": 30,
+						"line": 46,
 						"column": 24
 					}
 				}
@@ -159,7 +167,7 @@
 				{
 					"expression": "`Resend contact creation failed: ${response.status} ${details}`",
 					"location": {
-						"line": 31,
+						"line": 47,
 						"column": 2
 					}
 				}
@@ -169,11 +177,13 @@
 			"name": "parseResendContact",
 			"owner": null,
 			"qualifiedName": "parseResendContact",
+			"declarationId": "fn_aec7a9c1ad2b442bbf402693a28714b1",
+			"declaredResponsibility": "resend.contact.transform",
 			"kind": "function",
 			"exported": false,
 			"async": true,
 			"location": {
-				"line": 34,
+				"line": 54,
 				"column": 1
 			},
 			"parameters": [
@@ -188,7 +198,7 @@
 				{
 					"callee": "response.json",
 					"location": {
-						"line": 35,
+						"line": 55,
 						"column": 9
 					}
 				}
@@ -200,7 +210,7 @@
 				{
 					"expression": "response.json() as Promise<ResendContact>",
 					"location": {
-						"line": 35,
+						"line": 55,
 						"column": 2
 					}
 				}
@@ -210,11 +220,13 @@
 			"name": "createResendContact",
 			"owner": null,
 			"qualifiedName": "createResendContact",
+			"declarationId": "fn_4c68682c89fe48cba1e1f1ecc5fdfc00",
+			"declaredResponsibility": "resend.contact.create",
 			"kind": "function",
 			"exported": true,
 			"async": true,
 			"location": {
-				"line": 38,
+				"line": 62,
 				"column": 1
 			},
 			"parameters": [
@@ -234,42 +246,42 @@
 				{
 					"callee": "normalizeEmailAddress",
 					"location": {
-						"line": 46,
+						"line": 70,
 						"column": 26
 					}
 				},
 				{
 					"callee": "serializeResendContact",
 					"location": {
-						"line": 47,
+						"line": 71,
 						"column": 15
 					}
 				},
 				{
 					"callee": "createResendHeaders",
 					"location": {
-						"line": 48,
+						"line": 72,
 						"column": 18
 					}
 				},
 				{
 					"callee": "fetch",
 					"location": {
-						"line": 49,
+						"line": 73,
 						"column": 25
 					}
 				},
 				{
 					"callee": "readResendFailure",
 					"location": {
-						"line": 56,
+						"line": 80,
 						"column": 25
 					}
 				},
 				{
 					"callee": "parseResendContact",
 					"location": {
-						"line": 59,
+						"line": 83,
 						"column": 9
 					}
 				}
@@ -284,14 +296,14 @@
 				{
 					"expression": "new Error(\"RESEND_API_KEY is not configured\")",
 					"location": {
-						"line": 43,
+						"line": 67,
 						"column": 3
 					}
 				},
 				{
 					"expression": "new Error(await readResendFailure(response))",
 					"location": {
-						"line": 56,
+						"line": 80,
 						"column": 3
 					}
 				}
@@ -300,7 +312,7 @@
 				{
 					"expression": "parseResendContact(response)",
 					"location": {
-						"line": 59,
+						"line": 83,
 						"column": 2
 					}
 				}

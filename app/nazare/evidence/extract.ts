@@ -29,6 +29,8 @@ type FunctionEvidence = {
 	name: string;
 	owner: string | null;
 	qualifiedName: string;
+	declarationId: string | null;
+	declaredResponsibility: string | null;
 	kind: "function" | "method" | "arrow" | "function-expression";
 	exported: boolean;
 	async: boolean;
@@ -110,6 +112,17 @@ function functionOwner(node: FunctionLike): string | null {
 	return null;
 }
 
+function functionMetadata(node: FunctionLike) {
+	const container =
+		node.getFirstAncestorByKind(SyntaxKind.VariableStatement) ?? node;
+	const text = container.getFullText();
+	return {
+		declarationId: text.match(/@nazare-id\s+([^\s*]+)/)?.[1] ?? null,
+		declaredResponsibility:
+			text.match(/@responsibility\s+([^\s*]+)/)?.[1] ?? null,
+	};
+}
+
 function functionKind(node: FunctionLike): FunctionEvidence["kind"] {
 	if (Node.isFunctionDeclaration(node)) return "function";
 	if (Node.isMethodDeclaration(node)) return "method";
@@ -174,11 +187,13 @@ function extractFunction(
 
 	const name = functionName(node);
 	const owner = functionOwner(node);
+	const metadata = functionMetadata(node);
 
 	return {
 		name,
 		owner,
 		qualifiedName: owner ? `${owner}.${name}` : name,
+		...metadata,
 		kind: functionKind(node),
 		exported: isExported(node),
 		async: node.isAsync(),

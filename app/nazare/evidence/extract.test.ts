@@ -38,6 +38,23 @@ test("evidence qualifies methods owned by exported objects", () => {
 	);
 });
 
+test("evidence extracts code-authored responsibility metadata", () => {
+	const evidence = extract(`
+		/**
+		 * @nazare-id fn_1234567890abcdef1234567890abcdef
+		 * @responsibility email.address.validate
+		 */
+		function validateEmail(email: string) { return email.length > 0; }
+	`);
+	const [validateEmail] = evidence.functions;
+
+	assert.equal(
+		validateEmail?.declarationId,
+		"fn_1234567890abcdef1234567890abcdef",
+	);
+	assert.equal(validateEmail?.declaredResponsibility, "email.address.validate");
+});
+
 test("evidence leaves standalone function names unqualified", () => {
 	const evidence = extract("export function validateEmail() { return true; }");
 	const [validateEmail] = evidence.functions;

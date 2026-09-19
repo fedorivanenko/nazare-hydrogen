@@ -111,6 +111,74 @@ function identifierWords(identifier: string) {
 		.filter(Boolean);
 }
 
+function singularize(word: string) {
+	if (word.endsWith("ies") && word.length > 3) return `${word.slice(0, -3)}y`;
+	if (word.endsWith("sses")) return word.slice(0, -2);
+	if (word.endsWith("s") && !word.endsWith("ss") && word.length > 3) {
+		return word.slice(0, -1);
+	}
+	return word;
+}
+
+const semanticStopWords = new Set([
+	...actionOperations.keys(),
+	...responsibilityOperations,
+	"api",
+	"as",
+	"async",
+	"await",
+	"boolean",
+	"const",
+	"false",
+	"function",
+	"id",
+	"new",
+	"null",
+	"number",
+	"object",
+	"promise",
+	"provider",
+	"string",
+	"true",
+	"type",
+	"undefined",
+	"void",
+]);
+
+function semanticWords(value: string) {
+	return identifierWords(value)
+		.map(singularize)
+		.filter((word) => !semanticStopWords.has(word) && !/^\d+$/.test(word));
+}
+
+export function semanticCandidates(functionEvidence: FunctionEvidence) {
+	const sources = [
+		functionEvidence.name,
+		functionEvidence.owner ?? "",
+		functionEvidence.returnType,
+		...functionEvidence.parameters.flatMap((parameter) => [
+			parameter.name,
+			parameter.type,
+		]),
+		...functionEvidence.calls.flatMap((call) => {
+			const known = knownCallResponsibilities.get(call.callee);
+			return known ? [call.callee, known] : [call.callee];
+		}),
+		...functionEvidence.stringLiterals,
+		...functionEvidence.throws.map((statement) => statement.expression),
+		...functionEvidence.returns.map((statement) => statement.expression ?? ""),
+	];
+	const candidates = new Set<string>();
+
+	for (const source of sources) {
+		for (const word of semanticWords(source)) candidates.add(word);
+	}
+
+	return Array.from(candidates).filter((candidate) =>
+		/^[a-z][a-z0-9-]*$/.test(candidate),
+	);
+}
+
 export function identifierResponsibility(identifier: string) {
 	const words = identifierWords(identifier);
 	if (words.length < 3) return null;
@@ -144,8 +212,11 @@ function sourceFilePath(evidence: FileEvidence) {
 	return path.startsWith("../") ? evidence.sourceFile : path;
 }
 
-function functionId(sourceFile: string, qualifiedName: string) {
-	return `${sourceFile}#${qualifiedName}`;
+function functionId(sourceFile: string, functionEvidence: FunctionEvidence) {
+	return (
+		functionEvidence.declarationId ??
+		`${sourceFile}#${functionEvidence.qualifiedName}`
+	);
 }
 
 function inferredCallResponsibility(callee: string) {
@@ -189,9 +260,7 @@ export function extractFunctionCalls(
 			callee: call.callee,
 			line: call.location.line,
 			column: call.location.column,
-			targetFunctionId: target
-				? functionId(sourceFile, target.qualifiedName)
-				: null,
+			targetFunctionId: target ? functionId(sourceFile, target) : null,
 			responsibility:
 				targetResponsibility ?? inferredCallResponsibility(call.callee),
 		};
@@ -282,10 +351,48 @@ async function inferFunctionDeclaration(
 			`Cannot infer ${functionEvidence.qualifiedName} without implementation behavior facts.`,
 		);
 	}
+	if (functionEvidence.declaredResponsibility) {
+		const responsibility = responsibilityIdSchema.parse(
+			functionEvidence.declaredResponsibility,
+		);
+		const result = await generateText({
+			model,
+			abortSignal: AbortSignal.timeout(30_000),
+			temperature: 0,
+			output: Output.object({
+				schema: z.strictObject({
+					description: z.string().min(1),
+					evidence: z.array(z.enum(behaviorFactIds)).min(1).max(5),
+				}),
+			}),
+			system:
+				"Describe one software function from AST-derived implementation facts. The responsibility ID is code-authored and immutable.",
+			prompt: `Write one concise imperative sentence describing ${functionEvidence.qualifiedName}.
+Responsibility ID: ${responsibility}
+Facts:
+${facts.map((fact) => `${fact.id} ${fact.text}`).join("\n")}`,
+		});
+		return {
+			responsibility,
+			description: normalizeDescription(result.output.description),
+			usage: {
+				inputTokens: result.usage.inputTokens ?? 0,
+				outputTokens: result.usage.outputTokens ?? 0,
+				totalTokens: result.usage.totalTokens ?? 0,
+			},
+		};
+	}
+	const nounCandidates = semanticCandidates(functionEvidence);
+	if (nounCandidates.length === 0) {
+		throw new Error(
+			`Cannot infer ${functionEvidence.qualifiedName} without semantic noun candidates.`,
+		);
+	}
+	const nounSchema = z.enum(nounCandidates as [string, ...string[]]);
 	const output = Output.object({
 		schema: z.strictObject({
-			subject: z.string().regex(/^[a-z0-9-]+$/),
-			object: z.string().regex(/^[a-z0-9-]+$/),
+			subject: nounSchema,
+			object: nounSchema,
 			operation: responsibilityOperationSchema,
 			description: z.string().min(1),
 			evidence: z.array(z.enum(behaviorFactIds)).min(1).max(5),
@@ -293,12 +400,18 @@ async function inferFunctionDeclaration(
 	});
 	const basePrompt = `Infer what ${functionEvidence.qualifiedName} actually does.
 
+Allowed subject/object terms (select exactly; do not invent):
+${nounCandidates.map((candidate) => `- ${candidate}`).join("\n")}
+
 Rules:
 - Derive behavior from implementation facts, not naming alone.
 - Choose the function's successful-path software outcome, not a guard, validation step, serializer, or parser it merely calls.
 - Calls retain their own responsibilities separately; declaration responsibility must summarize what the whole function delivers.
 - Return values and externally observable side effects outweigh early guards.
-- Choose one subject, one singular object, and exactly one operation.
+- Choose one subject and one object exactly from the allowed terms, plus exactly one operation.
+- subject is the broader system/domain/value family; object is the specific entity/value/result acted upon.
+- Do not select the same term for both subject and object.
+- Prefer email/address for email validation or normalization, email/subscriber for subscriber collection, resend/contact for direct Resend contact operations, and email/result or subscriber/result for returned result objects when those terms are available.
 - operation must be one of: create, read, update, delete, validate, transform, execute.
 - create produces a new entity/value/result; read retrieves or observes existing data; update mutates existing state; delete removes state; validate checks an invariant; transform changes representation; execute coordinates or performs a process.
 - Use a vendor subject only when implementation directly invokes or decodes that vendor's API; never inherit a vendor from file path or function name alone.
@@ -324,6 +437,9 @@ ${facts.map((fact) => `${fact.id} ${fact.text}`).join("\n")}`;
 					"Infer one function's software responsibility from AST-derived implementation facts. Function names are weak hints; calls, literals, returns, throws, and types are stronger evidence.",
 				prompt: `${basePrompt}${previousError ? `\n\nPrevious output was rejected: ${previousError}\nCorrect that error.` : ""}`,
 			});
+			if (result.output.subject === result.output.object) {
+				throw new Error("Subject and object must differ.");
+			}
 			const responsibility = `${result.output.subject}.${result.output.object}.${result.output.operation}`;
 			validateInferredResponsibility(responsibility);
 			const description = normalizeDescription(result.output.description);
@@ -394,7 +510,7 @@ export async function inferResponsibility(
 	);
 	const functions = inferredDeclarations.map(
 		({ functionEvidence, inferred }) => ({
-			functionId: functionId(sourceFile, functionEvidence.qualifiedName),
+			functionId: functionId(sourceFile, functionEvidence),
 			function: functionEvidence.qualifiedName,
 			responsibility: inferred.responsibility,
 			description: inferred.description,

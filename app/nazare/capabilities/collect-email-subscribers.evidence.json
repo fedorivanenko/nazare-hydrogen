@@ -21,11 +21,13 @@
 			"name": "validateSubscriberEmail",
 			"owner": null,
 			"qualifiedName": "validateSubscriberEmail",
+			"declarationId": "fn_6c0a6726c74543f0954a32ad2eb881e4",
+			"declaredResponsibility": "email.address.validate",
 			"kind": "function",
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 9,
+				"line": 13,
 				"column": 1
 			},
 			"parameters": [
@@ -40,7 +42,7 @@
 				{
 					"callee": "EMAIL_PATTERN.test",
 					"location": {
-						"line": 10,
+						"line": 14,
 						"column": 9
 					}
 				}
@@ -52,7 +54,7 @@
 				{
 					"expression": "EMAIL_PATTERN.test(email)",
 					"location": {
-						"line": 10,
+						"line": 14,
 						"column": 2
 					}
 				}
@@ -62,11 +64,13 @@
 			"name": "createInvalidEmailResult",
 			"owner": null,
 			"qualifiedName": "createInvalidEmailResult",
+			"declarationId": "fn_04d1075829844cadb488f5ac48bb1749",
+			"declaredResponsibility": "email.result.create",
 			"kind": "function",
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 13,
+				"line": 21,
 				"column": 1
 			},
 			"parameters": [],
@@ -79,7 +83,7 @@
 				{
 					"expression": "{ ok: false as const, error: \"Enter a valid email address.\" }",
 					"location": {
-						"line": 14,
+						"line": 22,
 						"column": 2
 					}
 				}
@@ -89,11 +93,13 @@
 			"name": "createSubscriberCollectedResult",
 			"owner": null,
 			"qualifiedName": "createSubscriberCollectedResult",
+			"declarationId": "fn_2ff996dfc8ed41d385256e2c5622e379",
+			"declaredResponsibility": "subscriber.result.create",
 			"kind": "function",
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 17,
+				"line": 29,
 				"column": 1
 			},
 			"parameters": [],
@@ -110,7 +116,7 @@
 				{
 					"expression": "{\n\t\tok: true as const,\n\t\tevidence: {\n\t\t\ttype: \"connector-result\",\n\t\t\tconnector: \"provider.resend.contacts.create\",\n\t\t\tresult: \"contact-created\",\n\t\t},\n\t}",
 					"location": {
-						"line": 18,
+						"line": 30,
 						"column": 2
 					}
 				}
@@ -120,11 +126,13 @@
 			"name": "collectEmailSubscriber",
 			"owner": null,
 			"qualifiedName": "collectEmailSubscriber",
+			"declarationId": "fn_35916af3e4624ff69dd7943893dd36fd",
+			"declaredResponsibility": "email.subscriber.create",
 			"kind": "function",
 			"exported": false,
 			"async": true,
 			"location": {
-				"line": 28,
+				"line": 44,
 				"column": 1
 			},
 			"parameters": [
@@ -144,28 +152,28 @@
 				{
 					"callee": "validateSubscriberEmail",
 					"location": {
-						"line": 29,
+						"line": 45,
 						"column": 7
 					}
 				},
 				{
 					"callee": "createInvalidEmailResult",
 					"location": {
-						"line": 30,
+						"line": 46,
 						"column": 10
 					}
 				},
 				{
 					"callee": "createResendContact",
 					"location": {
-						"line": 33,
+						"line": 49,
 						"column": 8
 					}
 				},
 				{
 					"callee": "createSubscriberCollectedResult",
 					"location": {
-						"line": 34,
+						"line": 50,
 						"column": 9
 					}
 				}
@@ -177,14 +185,14 @@
 				{
 					"expression": "createInvalidEmailResult()",
 					"location": {
-						"line": 30,
+						"line": 46,
 						"column": 3
 					}
 				},
 				{
 					"expression": "createSubscriberCollectedResult()",
 					"location": {
-						"line": 34,
+						"line": 50,
 						"column": 2
 					}
 				}

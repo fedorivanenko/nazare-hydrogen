@@ -13,6 +13,8 @@ const normalizeEmailAddress: FileEvidence["functions"][number] = {
 	name: "normalizeEmailAddress",
 	owner: null,
 	qualifiedName: "normalizeEmailAddress",
+	declarationId: "fn_normalize",
+	declaredResponsibility: "email.address.transform",
 	kind: "function",
 	exported: false,
 	async: false,
@@ -30,6 +32,8 @@ const createResendContact: FileEvidence["functions"][number] = {
 	name: "createResendContact",
 	owner: null,
 	qualifiedName: "createResendContact",
+	declarationId: "fn_create_contact",
+	declaredResponsibility: "resend.contact.create",
 	kind: "function",
 	exported: true,
 	async: true,
@@ -81,8 +85,7 @@ test("calls reference inferred local declaration responsibilities", () => {
 				callee: "normalizeEmailAddress",
 				line: 46,
 				column: 26,
-				targetFunctionId:
-					"app/nazare/connectors/resend.server.ts#normalizeEmailAddress",
+				targetFunctionId: "fn_normalize",
 				responsibility: "email.address.transform",
 			},
 			{
