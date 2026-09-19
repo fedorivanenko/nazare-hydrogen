@@ -1,12 +1,17 @@
 export { resendDefinition as resendConnector } from "../registry/definitions";
 
+/** @nazare-id type_fb3c784e93da4e41aa0b93fd60b19765 */
 export type ResendConnectorEnv = {
 	RESEND_API_KEY?: string;
 };
 
+/** @nazare-id type_fbd4da0773ca499b8c143337fc6be4df */
 type ResendContact = {
 	id: string;
 };
+
+/** @nazare-id const_621d9292377e48ca9c520763c7a3a96d */
+const RESEND_CONTACTS_URL = "https://api.resend.com/contacts";
 
 /**
  * @nazare-id fn_8f469915c8414defa17333532177e0af
@@ -70,7 +75,7 @@ export async function createResendContact(
 	const normalizedEmail = normalizeEmailAddress(email);
 	const body = serializeResendContact(normalizedEmail);
 	const headers = createResendHeaders(env.RESEND_API_KEY);
-	const response = await fetch("https://api.resend.com/contacts", {
+	const response = await fetch(RESEND_CONTACTS_URL, {
 		method: "POST",
 		headers,
 		body,

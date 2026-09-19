@@ -55,6 +55,35 @@ test("evidence extracts code-authored responsibility metadata", () => {
 	assert.equal(validateEmail?.declaredResponsibility, "email.address.validate");
 });
 
+test("evidence extracts stamped type and constant identities", () => {
+	const evidence = extract(`
+		/** @nazare-id type_1234567890abcdef1234567890abcdef */
+		type Contact = { id: string };
+		/** @nazare-id const_1234567890abcdef1234567890abcdef */
+		const CONTACTS_URL = "https://example.com/contacts";
+	`);
+
+	assert.deepEqual(
+		evidence.identities.map(({ declarationId, name, kind }) => ({
+			declarationId,
+			name,
+			kind,
+		})),
+		[
+			{
+				declarationId: "type_1234567890abcdef1234567890abcdef",
+				name: "Contact",
+				kind: "type",
+			},
+			{
+				declarationId: "const_1234567890abcdef1234567890abcdef",
+				name: "CONTACTS_URL",
+				kind: "constant",
+			},
+		],
+	);
+});
+
 test("evidence leaves standalone function names unqualified", () => {
 	const evidence = extract("export function validateEmail() { return true; }");
 	const [validateEmail] = evidence.functions;

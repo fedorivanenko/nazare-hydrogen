@@ -55,8 +55,16 @@ type FunctionEvidence = {
 };
 
 export type FileEvidence = {
-	schemaVersion: 2;
+	schemaVersion: 3;
 	sourceFile: string;
+	identities: Array<{
+		declarationId: string;
+		name: string;
+		kind: "type" | "constant";
+		exported: boolean;
+		location: Location;
+		definition: string;
+	}>;
 	imports: Array<{
 		module: string;
 		defaultImport: string | null;
@@ -112,15 +120,19 @@ function functionOwner(node: FunctionLike): string | null {
 	return null;
 }
 
-function functionMetadata(node: FunctionLike) {
-	const container =
-		node.getFirstAncestorByKind(SyntaxKind.VariableStatement) ?? node;
-	const text = container.getFullText();
+function declarationMetadata(node: Node) {
+	const text = node.getFullText();
 	return {
 		declarationId: text.match(/@nazare-id\s+([^\s*]+)/)?.[1] ?? null,
 		declaredResponsibility:
 			text.match(/@responsibility\s+([^\s*]+)/)?.[1] ?? null,
 	};
+}
+
+function functionMetadata(node: FunctionLike) {
+	const container =
+		node.getFirstAncestorByKind(SyntaxKind.VariableStatement) ?? node;
+	return declarationMetadata(container);
 }
 
 function functionKind(node: FunctionLike): FunctionEvidence["kind"] {
@@ -233,9 +245,48 @@ export function extractFileEvidence(
 		...sourceFile.getDescendantsOfKind(SyntaxKind.FunctionExpression),
 	].sort((a, b) => a.getStart() - b.getStart());
 
+	const identities: FileEvidence["identities"] = [];
+	for (const declaration of [
+		...sourceFile.getDescendantsOfKind(SyntaxKind.ClassDeclaration),
+		...sourceFile.getDescendantsOfKind(SyntaxKind.InterfaceDeclaration),
+		...sourceFile.getDescendantsOfKind(SyntaxKind.TypeAliasDeclaration),
+		...sourceFile.getDescendantsOfKind(SyntaxKind.EnumDeclaration),
+	]) {
+		const declarationId = declarationMetadata(declaration).declarationId;
+		if (!declarationId?.startsWith("type_")) continue;
+		identities.push({
+			declarationId,
+			name: declaration.getName() ?? "<anonymous>",
+			kind: "type",
+			exported: declaration.isExported(),
+			location: location(sourceFile, declaration),
+			definition: declaration.getText(),
+		});
+	}
+	for (const declaration of sourceFile.getDescendantsOfKind(
+		SyntaxKind.VariableDeclaration,
+	)) {
+		const statement = declaration.getFirstAncestorByKind(
+			SyntaxKind.VariableStatement,
+		);
+		if (!statement) continue;
+		const declarationId = declarationMetadata(statement).declarationId;
+		if (!declarationId?.startsWith("const_")) continue;
+		identities.push({
+			declarationId,
+			name: declaration.getName(),
+			kind: "constant",
+			exported: statement.isExported(),
+			location: location(sourceFile, declaration),
+			definition: declaration.getText(),
+		});
+	}
+	identities.sort((a, b) => a.location.line - b.location.line);
+
 	return {
-		schemaVersion: 2,
+		schemaVersion: 3,
 		sourceFile: sourceFile.getFilePath(),
+		identities,
 		imports: sourceFile.getImportDeclarations().map((declaration) => ({
 			module: declaration.getModuleSpecifierValue(),
 			defaultImport: declaration.getDefaultImport()?.getText() ?? null,

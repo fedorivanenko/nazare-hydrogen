@@ -11,13 +11,13 @@
 				"kind": "function",
 				"exported": false,
 				"async": false,
-				"line": 15,
+				"line": 20,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "email.trim",
-					"line": 16,
+					"line": 21,
 					"column": 9,
 					"targetFunctionId": null,
 					"responsibility": "email.address.transform"
@@ -33,13 +33,13 @@
 				"kind": "function",
 				"exported": false,
 				"async": false,
-				"line": 23,
+				"line": 28,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "JSON.stringify",
-					"line": 24,
+					"line": 29,
 					"column": 9,
 					"targetFunctionId": null,
 					"responsibility": "json.value.transform"
@@ -50,12 +50,12 @@
 			"functionId": "fn_98ff2832fc9943829a21cc53bf0fc347",
 			"function": "createResendHeaders",
 			"responsibility": "resend.header.create",
-			"description": "Create and return Resend API headers including Bearer token authorization and JSON content type.",
+			"description": "Create and return Resend API headers including authorization and content type.",
 			"declaration": {
 				"kind": "function",
 				"exported": false,
 				"async": false,
-				"line": 34,
+				"line": 39,
 				"column": 1
 			},
 			"calls": []
@@ -69,13 +69,13 @@
 				"kind": "function",
 				"exported": false,
 				"async": true,
-				"line": 45,
+				"line": 50,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "response.text",
-					"line": 46,
+					"line": 51,
 					"column": 24,
 					"targetFunctionId": null,
 					"responsibility": "http.response.read"
@@ -86,18 +86,18 @@
 			"functionId": "fn_aec7a9c1ad2b442bbf402693a28714b1",
 			"function": "parseResendContact",
 			"responsibility": "resend.contact.transform",
-			"description": "Parse the JSON response from a Resend API call into a ResendContact object.",
+			"description": "Parse the JSON response from the Resend API into a ResendContact object.",
 			"declaration": {
 				"kind": "function",
 				"exported": false,
 				"async": true,
-				"line": 54,
+				"line": 59,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "response.json",
-					"line": 55,
+					"line": 60,
 					"column": 9,
 					"targetFunctionId": null,
 					"responsibility": "http.response.transform"
@@ -108,53 +108,53 @@
 			"functionId": "fn_4c68682c89fe48cba1e1f1ecc5fdfc00",
 			"function": "createResendContact",
 			"responsibility": "resend.contact.create",
-			"description": "Create a new contact in Resend by sending a POST request to the Resend API with normalized email address and serialized contact data, handling authentication and response parsing.",
+			"description": "Create a new contact in Resend by sending a POST request with normalized email address and serialized contact data, handling API key configuration and parsing the response.",
 			"declaration": {
 				"kind": "function",
 				"exported": true,
 				"async": true,
-				"line": 62,
+				"line": 67,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "normalizeEmailAddress",
-					"line": 70,
+					"line": 75,
 					"column": 26,
 					"targetFunctionId": "fn_8f469915c8414defa17333532177e0af",
 					"responsibility": "email.address.transform"
 				},
 				{
 					"callee": "serializeResendContact",
-					"line": 71,
+					"line": 76,
 					"column": 15,
 					"targetFunctionId": "fn_51beddd26c404b43af91304d3945b961",
 					"responsibility": "contact.json.transform"
 				},
 				{
 					"callee": "createResendHeaders",
-					"line": 72,
+					"line": 77,
 					"column": 18,
 					"targetFunctionId": "fn_98ff2832fc9943829a21cc53bf0fc347",
 					"responsibility": "resend.header.create"
 				},
 				{
 					"callee": "fetch",
-					"line": 73,
+					"line": 78,
 					"column": 25,
 					"targetFunctionId": null,
 					"responsibility": "http.request.execute"
 				},
 				{
 					"callee": "readResendFailure",
-					"line": 80,
+					"line": 85,
 					"column": 25,
 					"targetFunctionId": "fn_9e78a85c36c54f71ab9492e86f4b07d0",
 					"responsibility": "resend.failure.read"
 				},
 				{
 					"callee": "parseResendContact",
-					"line": 83,
+					"line": 88,
 					"column": 9,
 					"targetFunctionId": "fn_aec7a9c1ad2b442bbf402693a28714b1",
 					"responsibility": "resend.contact.transform"

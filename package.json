@@ -8,11 +8,12 @@
 		"dev": "shopify hydrogen dev",
 		"build": "shopify hydrogen build",
 		"typecheck": "react-router typegen && tsc --noEmit",
-		"test": "tsx --test app/nazare/registry/index.test.ts app/nazare/evidence/extract.test.ts app/nazare/responsibility/infer.test.ts",
+		"test": "tsx --test app/nazare/registry/index.test.ts app/nazare/evidence/extract.test.ts app/nazare/identity/stamp.test.ts app/nazare/responsibility/infer.test.ts",
 		"lint:biome": "biome lint .",
 		"lint:nazare": "tsx app/nazare/lint/cli.ts",
 		"lint": "pnpm run lint:biome && pnpm run lint:nazare",
 		"nazare:evidence": "tsx app/nazare/evidence/cli.ts",
+		"nazare:stamp": "tsx app/nazare/identity/cli.ts",
 		"nazare:responsibility": "tsx app/nazare/responsibility/cli.ts"
 	},
 	"dependencies": {

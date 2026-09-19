@@ -1,6 +1,30 @@
 {
-	"schemaVersion": 2,
+	"schemaVersion": 3,
 	"sourceFile": "/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/capabilities/collect-email-subscribers.ts",
+	"identities": [
+		{
+			"declarationId": "const_e2a14bee6fed49658dd6f1cd0e72fce4",
+			"name": "EMAIL_PATTERN",
+			"kind": "constant",
+			"exported": false,
+			"location": {
+				"line": 8,
+				"column": 7
+			},
+			"definition": "EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/"
+		},
+		{
+			"declarationId": "const_af2ed2d12f58475c8de954d0c938b239",
+			"name": "collectEmailSubscribers",
+			"kind": "constant",
+			"exported": true,
+			"location": {
+				"line": 62,
+				"column": 14
+			},
+			"definition": "collectEmailSubscribers = {\n\t...collectEmailSubscribersDefinition,\n\tpolicy: policyImplementations,\n\texecute: collectEmailSubscriber,\n}"
+		}
+	],
 	"imports": [
 		{
 			"module": "../connectors/resend.server",
@@ -27,7 +51,7 @@
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 13,
+				"line": 14,
 				"column": 1
 			},
 			"parameters": [
@@ -42,7 +66,7 @@
 				{
 					"callee": "EMAIL_PATTERN.test",
 					"location": {
-						"line": 14,
+						"line": 15,
 						"column": 9
 					}
 				}
@@ -54,7 +78,7 @@
 				{
 					"expression": "EMAIL_PATTERN.test(email)",
 					"location": {
-						"line": 14,
+						"line": 15,
 						"column": 2
 					}
 				}
@@ -70,7 +94,7 @@
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 21,
+				"line": 22,
 				"column": 1
 			},
 			"parameters": [],
@@ -83,7 +107,7 @@
 				{
 					"expression": "{ ok: false as const, error: \"Enter a valid email address.\" }",
 					"location": {
-						"line": 22,
+						"line": 23,
 						"column": 2
 					}
 				}
@@ -99,7 +123,7 @@
 			"exported": false,
 			"async": false,
 			"location": {
-				"line": 29,
+				"line": 30,
 				"column": 1
 			},
 			"parameters": [],
@@ -116,7 +140,7 @@
 				{
 					"expression": "{\n\t\tok: true as const,\n\t\tevidence: {\n\t\t\ttype: \"connector-result\",\n\t\t\tconnector: \"provider.resend.contacts.create\",\n\t\t\tresult: \"contact-created\",\n\t\t},\n\t}",
 					"location": {
-						"line": 30,
+						"line": 31,
 						"column": 2
 					}
 				}
@@ -132,7 +156,7 @@
 			"exported": false,
 			"async": true,
 			"location": {
-				"line": 44,
+				"line": 45,
 				"column": 1
 			},
 			"parameters": [
@@ -152,28 +176,28 @@
 				{
 					"callee": "validateSubscriberEmail",
 					"location": {
-						"line": 45,
+						"line": 46,
 						"column": 7
 					}
 				},
 				{
 					"callee": "createInvalidEmailResult",
 					"location": {
-						"line": 46,
+						"line": 47,
 						"column": 10
 					}
 				},
 				{
 					"callee": "createResendContact",
 					"location": {
-						"line": 49,
+						"line": 50,
 						"column": 8
 					}
 				},
 				{
 					"callee": "createSubscriberCollectedResult",
 					"location": {
-						"line": 50,
+						"line": 51,
 						"column": 9
 					}
 				}
@@ -185,14 +209,14 @@
 				{
 					"expression": "createInvalidEmailResult()",
 					"location": {
-						"line": 46,
+						"line": 47,
 						"column": 3
 					}
 				},
 				{
 					"expression": "createSubscriberCollectedResult()",
 					"location": {
-						"line": 50,
+						"line": 51,
 						"column": 2
 					}
 				}

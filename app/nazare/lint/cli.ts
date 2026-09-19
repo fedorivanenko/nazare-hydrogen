@@ -36,19 +36,29 @@ async function lintResponsibilityAnnotations(): Promise<Diagnostic[]> {
 			const declarationId = block.match(/@nazare-id\s+([^\s*]+)/)?.[1];
 			const responsibility = block.match(/@responsibility\s+([^\s*]+)/)?.[1];
 			if (!declarationId && !responsibility) continue;
-			if (!declarationId || !/^fn_[a-f0-9]{32}$/.test(declarationId)) {
+			if (
+				!declarationId ||
+				!/^(?:fn|type|const)_[a-f0-9]{32}$/.test(declarationId)
+			) {
 				diagnostics.push({
 					level: "error",
 					entity: path,
-					message: "Responsibility annotation requires a valid @nazare-id",
+					message: "Annotation requires a valid @nazare-id",
 				});
 				continue;
 			}
-			if (!responsibility || !responsibilityPattern.test(responsibility)) {
+			if (responsibility && !responsibilityPattern.test(responsibility)) {
 				diagnostics.push({
 					level: "error",
 					entity: declarationId,
-					message: "Invalid or missing @responsibility",
+					message: "Invalid @responsibility",
+				});
+			}
+			if (responsibility && !declarationId.startsWith("fn_")) {
+				diagnostics.push({
+					level: "error",
+					entity: declarationId,
+					message: "@responsibility is only valid on fn_ identities",
 				});
 			}
 			const existing = declarations.get(declarationId);

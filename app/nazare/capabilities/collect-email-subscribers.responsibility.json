@@ -6,18 +6,18 @@
 			"functionId": "fn_6c0a6726c74543f0954a32ad2eb881e4",
 			"function": "validateSubscriberEmail",
 			"responsibility": "email.address.validate",
-			"description": "Validate the format of a subscriber's email address by testing it against a predefined pattern.",
+			"description": "Validate the format of a subscriber's email address by testing it against a predefined pattern and return a boolean result.",
 			"declaration": {
 				"kind": "function",
 				"exported": false,
 				"async": false,
-				"line": 13,
+				"line": 14,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "EMAIL_PATTERN.test",
-					"line": 14,
+					"line": 15,
 					"column": 9,
 					"targetFunctionId": null,
 					"responsibility": "email.address.validate"
@@ -33,7 +33,7 @@
 				"kind": "function",
 				"exported": false,
 				"async": false,
-				"line": 21,
+				"line": 22,
 				"column": 1
 			},
 			"calls": []
@@ -42,12 +42,12 @@
 			"functionId": "fn_2ff996dfc8ed41d385256e2c5622e379",
 			"function": "createSubscriberCollectedResult",
 			"responsibility": "subscriber.result.create",
-			"description": "Create a subscriber collected result with the specified evidence.",
+			"description": "Create a subscriber collected result with connector result type, provider resend contacts create connector, and contact created result.",
 			"declaration": {
 				"kind": "function",
 				"exported": false,
 				"async": false,
-				"line": 29,
+				"line": 30,
 				"column": 1
 			},
 			"calls": []
@@ -56,39 +56,39 @@
 			"functionId": "fn_35916af3e4624ff69dd7943893dd36fd",
 			"function": "collectEmailSubscriber",
 			"responsibility": "email.subscriber.create",
-			"description": "Collects an email subscriber by validating the email address and creating appropriate results.",
+			"description": "Collect an email subscriber by validating the email address and creating appropriate results.",
 			"declaration": {
 				"kind": "function",
 				"exported": false,
 				"async": true,
-				"line": 44,
+				"line": 45,
 				"column": 1
 			},
 			"calls": [
 				{
 					"callee": "validateSubscriberEmail",
-					"line": 45,
+					"line": 46,
 					"column": 7,
 					"targetFunctionId": "fn_6c0a6726c74543f0954a32ad2eb881e4",
 					"responsibility": "email.address.validate"
 				},
 				{
 					"callee": "createInvalidEmailResult",
-					"line": 46,
+					"line": 47,
 					"column": 10,
 					"targetFunctionId": "fn_04d1075829844cadb488f5ac48bb1749",
 					"responsibility": "email.result.create"
 				},
 				{
 					"callee": "createResendContact",
-					"line": 49,
+					"line": 50,
 					"column": 8,
 					"targetFunctionId": null,
 					"responsibility": "resend.contact.create"
 				},
 				{
 					"callee": "createSubscriberCollectedResult",
-					"line": 50,
+					"line": 51,
 					"column": 9,
 					"targetFunctionId": "fn_2ff996dfc8ed41d385256e2c5622e379",
 					"responsibility": "subscriber.result.create"

@@ -54,9 +54,10 @@ const createResendContact: FileEvidence["functions"][number] = {
 };
 
 const evidence: FileEvidence = {
-	schemaVersion: 2,
+	schemaVersion: 3,
 	sourceFile:
 		"/Users/fedori/Coding/personal/nazare-hydrogen/app/nazare/connectors/resend.server.ts",
+	identities: [],
 	imports: [],
 	reExports: [],
 	functions: [normalizeEmailAddress, createResendContact],

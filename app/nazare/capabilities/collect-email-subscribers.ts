@@ -4,6 +4,7 @@ import {
 } from "../connectors/resend.server";
 import { collectEmailSubscribersDefinition } from "../registry/definitions";
 
+/** @nazare-id const_e2a14bee6fed49658dd6f1cd0e72fce4 */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -57,6 +58,7 @@ const policyImplementations = {
 	(email: string) => boolean
 >;
 
+/** @nazare-id const_af2ed2d12f58475c8de954d0c938b239 */
 export const collectEmailSubscribers = {
 	...collectEmailSubscribersDefinition,
 	policy: policyImplementations,
