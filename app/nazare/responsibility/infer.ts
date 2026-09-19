@@ -6,7 +6,6 @@ export const responsibilitySchema = z.object({
 	function: z.string().min(1),
 	primaryResponsibility: z.string().regex(/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/),
 	description: z.string().min(1),
-	confidence: z.number().min(0).max(1),
 	mixed: z.boolean(),
 	evidence: z.array(z.string().min(1)).min(1),
 });
@@ -102,7 +101,6 @@ Return exactly this shape:
   "function": "candidate from the list",
   "primaryResponsibility": "service.resource.action",
   "description": "short imperative description",
-  "confidence": 0.0,
   "mixed": false,
   "evidence": ["facts grounded in the input"]
 }

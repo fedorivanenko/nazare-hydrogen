@@ -2,7 +2,6 @@
 	"function": "collectEmailSubscribers",
 	"primaryResponsibility": "email.subscriber.create",
 	"description": "Collect an email subscriber",
-	"confidence": 0.98,
 	"mixed": false,
 	"evidence": [
 		"The file is named collect-email-subscribers.ts and imports collectEmailSubscribersDefinition.",

@@ -50,7 +50,6 @@ const response = {
 	function: "collectEmailSubscribers",
 	primaryResponsibility: "resend.contacts.create",
 	description: "Create a contact in Resend",
-	confidence: 0.99,
 	mixed: false,
 	evidence: ["createResendContact"],
 };

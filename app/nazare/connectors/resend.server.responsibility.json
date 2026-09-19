@@ -2,7 +2,6 @@
 	"function": "createResendContact",
 	"primaryResponsibility": "resend.contact.create",
 	"description": "Create a Resend contact via API",
-	"confidence": 0.95,
 	"mixed": false,
 	"evidence": [
 		"function name: createResendContact",
