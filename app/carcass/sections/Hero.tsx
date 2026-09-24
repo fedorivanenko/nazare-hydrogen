@@ -1,7 +1,5 @@
 import { Form } from "react-router";
 
-export { heroDefinition as heroContract } from "../../registry/definitions";
-
 type HeroProps = {
 	eyebrow?: string;
 	heading: string;

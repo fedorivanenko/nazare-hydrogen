@@ -6,9 +6,9 @@ import {
 	ScrollRestoration,
 	useActionData,
 } from "react-router";
-import { collectEmailSubscribers } from "./nazare/capabilities/collect-email-subscribers";
-import { Hero } from "./nazare/carcass/sections/Hero";
-import type { ResendConnectorEnv } from "./nazare/connectors/resend.server";
+import { collectEmailSubscribers } from "./capabilities/collect-email-subscribers";
+import { Hero } from "./carcass/sections/Hero";
+import type { ResendConnectorEnv } from "./connectors/resend.server";
 
 export function Layout({ children }: { children: ReactNode }) {
 	return (

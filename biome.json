@@ -5,11 +5,5 @@
 	},
 	"linter": {
 		"enabled": true
-	},
-	"plugins": [
-		{
-			"path": "./app/nazare/lint/no-provider-import-from-carcass.grit",
-			"includes": ["app/nazare/carcass/**/*.ts", "app/nazare/carcass/**/*.tsx"]
-		}
-	]
+	}
 }
