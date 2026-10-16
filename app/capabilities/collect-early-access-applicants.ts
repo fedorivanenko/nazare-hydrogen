@@ -1,5 +1,6 @@
 import {
   createResendContact,
+  addResendContactToEarlyAccess,
   type ResendConnectorEnv,
 } from "../connectors/resend.server";
 
@@ -17,6 +18,7 @@ export async function collectEarlyAccessApplicant(
     return { ok: false as const, error: "Enter a valid email address." };
   }
 
-  await createResendContact(email, env);
-  return { ok: true as const };
+  const contact = await createResendContact(email, env);
+  await addResendContactToEarlyAccess(contact.id, env);
+  return { ok: true as const, signupKind: "early-access" as const };
 }
