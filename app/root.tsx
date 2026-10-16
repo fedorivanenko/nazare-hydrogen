@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import {
+	Form,
 	Links,
 	Meta,
 	Scripts,
 	ScrollRestoration,
 	useActionData,
 } from "react-router";
+import { collectEarlyAccessApplicant } from "./capabilities/collect-early-access-applicants";
 import { collectEmailSubscribers } from "./capabilities/collect-email-subscribers";
 import { Hero } from "./carcass/sections/Hero";
 import type { ResendConnectorEnv } from "./connectors/resend.server";
@@ -39,8 +41,12 @@ export async function action({
 }) {
 	const formData = await request.formData();
 	const email = String(formData.get("email") ?? "").trim();
+	const signupKind = String(formData.get("signupKind") ?? "newsletter");
 
 	try {
+		if (signupKind === "early-access") {
+			return await collectEarlyAccessApplicant(email, context.env);
+		}
 		return await collectEmailSubscribers.execute(email, context.env);
 	} catch (error) {
 		console.error(error);
@@ -52,6 +58,7 @@ export default function App() {
 	const result = useActionData<typeof action>();
 
 	return (
+		<>
 		<Hero
 			eyebrow="Nazare"
 			heading="Commerce, operable."
@@ -61,5 +68,14 @@ export default function App() {
 				result?.ok ? "Subscribed." : result?.error ? result.error : undefined
 			}
 		/>
+		<section style={{ maxWidth: 720, margin: "0 auto 8vh", padding: 24 }}>
+			<h2>Request early access</h2>
+			<Form method="post" style={{ display: "flex", gap: 8 }}>
+				<input type="hidden" name="signupKind" value="early-access" />
+				<input type="email" name="email" required aria-label="Early access email" placeholder="you@example.com" />
+				<button type="submit">Join early access</button>
+			</Form>
+		</section>
+		</>
 	);
 }
