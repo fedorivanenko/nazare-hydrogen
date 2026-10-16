@@ -15,7 +15,7 @@ export async function collectEarlyAccessApplicant(
   env: ResendConnectorEnv,
 ) {
   if (!validateEarlyAccessEmail(email)) {
-    return { ok: false as const, error: "Enter a valid email address." };
+    return { ok: false as const, signupKind: "early-access" as const, error: "Enter a valid email address." };
   }
 
   const contact = await createResendContact(email, env);
