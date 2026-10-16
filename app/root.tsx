@@ -47,10 +47,11 @@ export async function action({
 		if (signupKind === "early-access") {
 			return await collectEarlyAccessApplicant(email, context.env);
 		}
-		return await collectEmailSubscribers.execute(email, context.env);
+		const result = await collectEmailSubscribers.execute(email, context.env);
+		return { ...result, signupKind: "newsletter" as const };
 	} catch (error) {
 		console.error(error);
-		return { ok: false as const, error: "Could not subscribe right now." };
+		return { ok: false as const, signupKind: signupKind === "early-access" ? "early-access" as const : "newsletter" as const, error: "Could not subscribe right now." };
 	}
 }
 
@@ -65,7 +66,9 @@ export default function App() {
 			body="A minimal Carcass section with a business capability attached through a connector."
 			emailCapture={{ buttonLabel: "Join the list" }}
 			message={
-				result?.ok ? "Subscribed." : result?.error ? result.error : undefined
+				result?.signupKind === "newsletter"
+					? result.ok ? "Subscribed." : result.error
+					: undefined
 			}
 		/>
 		<section style={{ maxWidth: 720, margin: "0 auto 8vh", padding: 24 }}>
@@ -75,6 +78,9 @@ export default function App() {
 				<input type="email" name="email" required aria-label="Early access email" placeholder="you@example.com" />
 				<button type="submit">Join early access</button>
 			</Form>
+			{result?.signupKind === "early-access" ? (
+				<p role="status">{result.ok ? "Early-access request received." : result.error}</p>
+			) : null}
 		</section>
 		</>
 	);
