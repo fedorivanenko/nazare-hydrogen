@@ -1,5 +1,6 @@
 export type ResendConnectorEnv = {
 	RESEND_API_KEY?: string;
+	RESEND_EARLY_ACCESS_SEGMENT_ID?: string;
 };
 
 export async function createResendContact(
@@ -30,4 +31,23 @@ export async function createResendContact(
 	}
 
 	return response.json() as Promise<{ id: string }>;
+}
+
+export async function addResendContactToEarlyAccess(
+  contactId: string,
+  env: ResendConnectorEnv,
+) {
+  if (!env.RESEND_API_KEY || !env.RESEND_EARLY_ACCESS_SEGMENT_ID) {
+    throw new Error("Early-access Resend segment is not configured");
+  }
+  const response = await fetch(
+    `https://api.resend.com/contacts/${encodeURIComponent(contactId)}/segments/${encodeURIComponent(env.RESEND_EARLY_ACCESS_SEGMENT_ID)}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}` },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Resend segment assignment failed: ${response.status}`);
+  }
 }
