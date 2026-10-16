@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import {
+	Form,
 	Links,
 	Meta,
 	Scripts,
 	ScrollRestoration,
 	useActionData,
 } from "react-router";
+import { collectEarlyAccessApplicant } from "./capabilities/collect-early-access-applicants";
 import { collectEmailSubscribers } from "./capabilities/collect-email-subscribers";
 import { Hero } from "./carcass/sections/Hero";
 import type { ResendConnectorEnv } from "./connectors/resend.server";
@@ -39,12 +41,17 @@ export async function action({
 }) {
 	const formData = await request.formData();
 	const email = String(formData.get("email") ?? "").trim();
+	const signupKind = String(formData.get("signupKind") ?? "newsletter");
 
 	try {
-		return await collectEmailSubscribers.execute(email, context.env);
+		if (signupKind === "early-access") {
+			return await collectEarlyAccessApplicant(email, context.env);
+		}
+		const result = await collectEmailSubscribers.execute(email, context.env);
+		return { ...result, signupKind: "newsletter" as const };
 	} catch (error) {
 		console.error(error);
-		return { ok: false as const, error: "Could not subscribe right now." };
+		return { ok: false as const, signupKind: signupKind === "early-access" ? "early-access" as const : "newsletter" as const, error: "Could not subscribe right now." };
 	}
 }
 
@@ -52,14 +59,29 @@ export default function App() {
 	const result = useActionData<typeof action>();
 
 	return (
+		<>
 		<Hero
 			eyebrow="Nazare"
 			heading="Commerce, operable."
 			body="A minimal Carcass section with a business capability attached through a connector."
 			emailCapture={{ buttonLabel: "Join the list" }}
 			message={
-				result?.ok ? "Subscribed." : result?.error ? result.error : undefined
+				result?.signupKind === "newsletter"
+					? result.ok ? "Subscribed." : result.error
+					: undefined
 			}
 		/>
+		<section style={{ maxWidth: 720, margin: "0 auto 8vh", padding: 24 }}>
+			<h2>Request early access</h2>
+			<Form method="post" style={{ display: "flex", gap: 8 }}>
+				<input type="hidden" name="signupKind" value="early-access" />
+				<input type="email" name="email" required aria-label="Early access email" placeholder="you@example.com" />
+				<button type="submit">Join early access</button>
+			</Form>
+			{result?.signupKind === "early-access" ? (
+				<p role="status">{result.ok ? "Early-access request received." : result.error}</p>
+			) : null}
+		</section>
+		</>
 	);
 }
