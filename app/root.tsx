@@ -58,6 +58,7 @@ export default function App() {
 	const result = useActionData<typeof action>();
 
 	return (
+		<>
 		<Hero
 			eyebrow="Nazare"
 			heading="Commerce, operable."
@@ -75,5 +76,6 @@ export default function App() {
 				<button type="submit">Join early access</button>
 			</Form>
 		</section>
+		</>
 	);
 }
